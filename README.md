@@ -97,8 +97,8 @@ Before running the project, ensure you have the following installed:
 ### 📥 Clone the Repository
 
 ```bash
-  git clone https://github.com/rasadov/EcommerceAPI.git
-  cd ecommercemicroservices
+git clone https://github.com/Tuananh165-art/GoshopX.git
+cd GoshopX
 ```
 
 ---
@@ -223,24 +223,6 @@ mutation {
   }
 }
 ```
-
-## 🤝 Contributing
-We welcome contributions! To contribute:
-
-Fork the repository
-
-Create a new branch
-
-Commit and push your changes
-
-Open a Pull Request
-
-## 👤 Author
-
-**Rauf Asadov**  
-GitHub: [@rasadov](https://github.com/rasadov)  
-LinkedIn: [Rauf Asadov](https://www.linkedin.com/in/rauf-asadov/)  
-Email: raufasadov23@gmail.com
 
 ## 🪪 License
 This project is licensed under the Apache License 2.0.

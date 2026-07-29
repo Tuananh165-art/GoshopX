@@ -1,6 +1,6 @@
 services:
   base:
-    image: "rasadov/ecommerce-base:latest"
+    image: "tuananh165/ecommerce-base:latest"
     build:
       context: .
       dockerfile: docker/base.dockerfile
@@ -86,7 +86,7 @@ services:
 
   account:
     container_name: "account"
-    image: "rasadov/account:latest"
+    image: "tuananh165/account:latest"
     build:
       context: .
       dockerfile: docker/services/account.dockerfile
@@ -98,7 +98,7 @@ services:
 
   product:
     container_name: "product"
-    image: "rasadov/product:latest"
+    image: "tuananh165/product:latest"
     build:
       context: .
       dockerfile: docker/services/product.dockerfile
@@ -112,7 +112,7 @@ services:
 
   order:
     container_name: "order"
-    image: "rasadov/order:latest"
+    image: "tuananh165/order:latest"
     build:
       context: .
       dockerfile: docker/services/order.dockerfile
@@ -130,7 +130,7 @@ services:
 
   payment:
     container_name: "payment"
-    image: "rasadov/payment:latest"
+    image: "tuananh165/payment:latest"
     build:
       context: .
       dockerfile: docker/services/payment.dockerfile
@@ -149,7 +149,7 @@ services:
 
   recommender-server:
     container_name: "recommender"
-    image: "rasadov/recommender:latest"
+    image: "tuananh165/recommender:latest"
     build:
       context: .
       dockerfile: docker/services/recommender.dockerfile
@@ -168,7 +168,7 @@ services:
 
   recommender-sync:
     container_name: "recommender-sync"
-    image: "rasadov/recommender-sync:latest"
+    image: "tuananh165/recommender-sync:latest"
     build:
       context: .
       dockerfile: docker/services/recommender.dockerfile
@@ -186,7 +186,7 @@ services:
 
   recommender-train:
     container_name: "recommender-train"
-    image: "rasadov/recommender-train:latest"
+    image: "tuananh165/recommender-train:latest"
     build:
       context: .
       dockerfile: docker/services/recommender.dockerfile
@@ -202,7 +202,7 @@ services:
 
   graphql:
     container_name: "graphql"
-    image: "rasadov/graphql:latest"
+    image: "tuananh165/graphql:latest"
     build:
       context: .
       dockerfile: docker/services/graphql.dockerfile
