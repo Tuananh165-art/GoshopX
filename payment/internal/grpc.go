@@ -1,10 +1,10 @@
-package internal
+﻿package internal
 
 import (
 	"context"
 
-	order "github.com/rasadov/EcommerceAPI/order/client"
-	"github.com/rasadov/EcommerceAPI/payment/proto/pb"
+	order "github.com/Tuananh165art/GoshopX/order/client"
+	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -20,7 +20,7 @@ func (s *grpcServer) CreateCheckoutSession(ctx context.Context, request *pb.Chec
 		return nil, err
 	}
 
-	checkoutUrl, err := s.service.CreateCheckoutSession(ctx, request.UserId, customer.CustomerId, request.RedirectURL, request.Products, request.OrderId)
+	checkoutUrl, err := s.service.CreateCheckoutSession(ctx, request.UserId, customer.CustomerId, request.RedirectURL, request.Products, request.OrderId, request.ReservationIds)
 	if err != nil {
 		return nil, err
 	}
@@ -46,3 +46,4 @@ func (s *grpcServer) CreateCustomerPortalSession(ctx context.Context, request *p
 		Value: link,
 	}, nil
 }
+

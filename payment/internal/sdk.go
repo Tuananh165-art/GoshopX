@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -11,12 +11,13 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
+	"github.com/Tuananh165art/GoshopX/payment/config"
+	"github.com/Tuananh165art/GoshopX/payment/dto"
+	"github.com/Tuananh165art/GoshopX/payment/models"
 	"github.com/dodopayments/dodopayments-go"
 	"github.com/dodopayments/dodopayments-go/option"
-	"github.com/rasadov/EcommerceAPI/payment/config"
-	"github.com/rasadov/EcommerceAPI/payment/dto"
-	"github.com/rasadov/EcommerceAPI/payment/models"
 )
 
 type PaymentClient interface {
@@ -36,7 +37,7 @@ type PaymentClient interface {
 	CreateCheckoutSession(ctx context.Context,
 		userId uint64,
 		customerId string, redirect string,
-		dodoProducts []dodopayments.CheckoutSessionRequestProductCartParam, orderId uint64) (checkoutURL string, err error)
+		dodoProducts []dodopayments.CheckoutSessionRequestProductCartParam, orderId uint64, reservationIDs []string) (checkoutURL string, err error)
 
 	HandleWebhook(w http.ResponseWriter, r *http.Request) (*models.Transaction, error)
 }
@@ -127,7 +128,7 @@ func (d *dodoClient) ArchiveProduct(ctx context.Context, productId string) error
 func (d *dodoClient) CreateCheckoutSession(ctx context.Context,
 	userId uint64,
 	customerId string, redirect string,
-	dodoProducts []dodopayments.CheckoutSessionRequestProductCartParam, orderId uint64) (checkoutURL string, err error) {
+	dodoProducts []dodopayments.CheckoutSessionRequestProductCartParam, orderId uint64, reservationIDs []string) (checkoutURL string, err error) {
 
 	checkoutSession, err := d.client.CheckoutSessions.New(ctx, dodopayments.CheckoutSessionNewParams{
 		CheckoutSessionRequest: dodopayments.CheckoutSessionRequestParam{
@@ -139,8 +140,9 @@ func (d *dodoClient) CreateCheckoutSession(ctx context.Context,
 			ReturnURL:   dodopayments.F(redirect),
 			ProductCart: dodopayments.F(dodoProducts),
 			Metadata: dodopayments.F(map[string]string{
-				"order_id": fmt.Sprintf("%d", orderId),
-				"user_id":  fmt.Sprintf("%d", userId),
+				"order_id":        fmt.Sprintf("%d", orderId),
+				"user_id":         fmt.Sprintf("%d", userId),
+				"reservation_ids": strings.Join(reservationIDs, ","),
 			}),
 		},
 	})
@@ -197,14 +199,15 @@ func (d *dodoClient) HandleWebhook(w http.ResponseWriter, r *http.Request) (*mod
 	}
 
 	transaction := &models.Transaction{
-		OrderId:      payload.Data.Metadata.OrderId,
-		UserId:       payload.Data.Metadata.UserId,
-		CustomerId:   payload.Data.Customer.CustomerID,
-		PaymentId:    payload.Data.PaymentId,
-		TotalPrice:   payload.Data.TotalAmount,
-		SettledPrice: payload.Data.SettledAmount,
-		Currency:     string(payload.Data.Currency),
-		Status:       string(payload.Data.Status),
+		OrderId:        payload.Data.Metadata.OrderId,
+		UserId:         payload.Data.Metadata.UserId,
+		CustomerId:     payload.Data.Customer.CustomerID,
+		PaymentId:      payload.Data.PaymentId,
+		TotalPrice:     payload.Data.TotalAmount,
+		SettledPrice:   payload.Data.SettledAmount,
+		Currency:       string(payload.Data.Currency),
+		Status:         string(payload.Data.Status),
+		ReservationIDs: payload.Data.Metadata.ReservationIDs,
 	}
 
 	// Process the webhook based on event type
@@ -221,3 +224,4 @@ func (d *dodoClient) HandleWebhook(w http.ResponseWriter, r *http.Request) (*mod
 	w.WriteHeader(http.StatusOK)
 	return transaction, nil
 }
+

@@ -1,12 +1,12 @@
-package internal
+﻿package internal
 
 import (
 	"context"
 	"errors"
 
-	"github.com/rasadov/EcommerceAPI/account/models"
-	"github.com/rasadov/EcommerceAPI/pkg/auth"
-	"github.com/rasadov/EcommerceAPI/pkg/crypt"
+	"github.com/Tuananh165art/GoshopX/account/models"
+	"github.com/Tuananh165art/GoshopX/pkg/auth"
+	"github.com/Tuananh165art/GoshopX/pkg/crypt"
 )
 
 type Service interface {
@@ -79,3 +79,4 @@ func (service accountService) GetAccounts(ctx context.Context, skip uint64, take
 	return service.repository.ListAccounts(ctx, skip, take)
 
 }
+

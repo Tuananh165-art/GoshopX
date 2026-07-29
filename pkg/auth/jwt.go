@@ -1,12 +1,12 @@
-package auth
+﻿package auth
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/Tuananh165art/GoshopX/account/config"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/rasadov/EcommerceAPI/account/config"
 )
 
 type JWTCustomClaims struct {
@@ -52,3 +52,4 @@ func ValidateToken(encodedToken string) (*jwt.Token, error) {
 
 	return nil, errors.New("invalid token claims")
 }
+

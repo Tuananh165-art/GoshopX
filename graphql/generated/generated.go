@@ -14,7 +14,6 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
-	"github.com/rasadov/EcommerceAPI/graphql/models"
 	gqlparser "github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -41,6 +40,7 @@ type Config struct {
 type ResolverRoot interface {
 	Account() AccountResolver
 	Mutation() MutationResolver
+	Product() ProductResolver
 	Query() QueryResolver
 }
 
@@ -59,15 +59,56 @@ type ComplexityRoot struct {
 		Token func(childComplexity int) int
 	}
 
+	Cart struct {
+		AccountID func(childComplexity int) int
+		ExpiresAt func(childComplexity int) int
+		Items     func(childComplexity int) int
+	}
+
+	CartItem struct {
+		Product       func(childComplexity int) int
+		Quantity      func(childComplexity int) int
+		ReservationID func(childComplexity int) int
+		ReservedUntil func(childComplexity int) int
+	}
+
+	InventoryAvailability struct {
+		AvailableQuantity func(childComplexity int) int
+		LowStock          func(childComplexity int) int
+		ProductID         func(childComplexity int) int
+		ReorderLevel      func(childComplexity int) int
+		ReservedQuantity  func(childComplexity int) int
+		TotalQuantity     func(childComplexity int) int
+	}
+
 	Mutation struct {
+		AddCartItem                 func(childComplexity int, productID string, quantity int) int
+		CheckoutCart                func(childComplexity int, redirectURL string) int
+		ClearCart                   func(childComplexity int) int
 		CreateCheckoutSession       func(childComplexity int, details *CheckoutInput) int
 		CreateCustomerPortalSession func(childComplexity int, credentials *CustomerPortalSessionInput) int
 		CreateOrder                 func(childComplexity int, order OrderInput) int
 		CreateProduct               func(childComplexity int, product CreateProductInput) int
 		DeleteProduct               func(childComplexity int, id string) int
 		Login                       func(childComplexity int, account LoginInput) int
+		MarkAllNotificationsRead    func(childComplexity int) int
+		MarkNotificationRead        func(childComplexity int, id int) int
 		Register                    func(childComplexity int, account RegisterInput) int
+		RemoveCartItem              func(childComplexity int, productID string) int
+		UpdateCartItemQuantity      func(childComplexity int, productID string, quantity int) int
 		UpdateProduct               func(childComplexity int, product UpdateProductInput) int
+		UpsertProductStock          func(childComplexity int, input UpsertProductStockInput) int
+	}
+
+	Notification struct {
+		CreatedAt    func(childComplexity int) int
+		EventType    func(childComplexity int) int
+		ID           func(childComplexity int) int
+		IsRead       func(childComplexity int) int
+		Message      func(childComplexity int) int
+		MetadataJSON func(childComplexity int) int
+		ReadAt       func(childComplexity int) int
+		Title        func(childComplexity int) int
 	}
 
 	Order struct {
@@ -86,16 +127,20 @@ type ComplexityRoot struct {
 	}
 
 	Product struct {
-		AccountID   func(childComplexity int) int
-		Description func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Name        func(childComplexity int) int
-		Price       func(childComplexity int) int
+		AccountID    func(childComplexity int) int
+		Availability func(childComplexity int) int
+		Description  func(childComplexity int) int
+		ID           func(childComplexity int) int
+		Name         func(childComplexity int) int
+		Price        func(childComplexity int) int
 	}
 
 	Query struct {
-		Accounts func(childComplexity int, pagination *PaginationInput, id *int) int
-		Product  func(childComplexity int, pagination *PaginationInput, query *string, id *string, viewedProductsIds []*string, byAccountID *bool) int
+		Accounts                func(childComplexity int, pagination *PaginationInput, id *int) int
+		MyCart                  func(childComplexity int) int
+		Notifications           func(childComplexity int, pagination *PaginationInput) int
+		Product                 func(childComplexity int, pagination *PaginationInput, query *string, id *string, viewedProductsIds []*string, byAccountID *bool) int
+		UnreadNotificationCount func(childComplexity int) int
 	}
 
 	RedirectResponse struct {
@@ -104,9 +149,7 @@ type ComplexityRoot struct {
 }
 
 type AccountResolver interface {
-	ID(ctx context.Context, obj *models.Account) (int, error)
-
-	Orders(ctx context.Context, obj *models.Account) ([]*Order, error)
+	Orders(ctx context.Context, obj *Account) ([]*Order, error)
 }
 type MutationResolver interface {
 	Register(ctx context.Context, account RegisterInput) (*AuthResponse, error)
@@ -117,10 +160,24 @@ type MutationResolver interface {
 	CreateOrder(ctx context.Context, order OrderInput) (*Order, error)
 	CreateCustomerPortalSession(ctx context.Context, credentials *CustomerPortalSessionInput) (*RedirectResponse, error)
 	CreateCheckoutSession(ctx context.Context, details *CheckoutInput) (*RedirectResponse, error)
+	UpsertProductStock(ctx context.Context, input UpsertProductStockInput) (*InventoryAvailability, error)
+	AddCartItem(ctx context.Context, productID string, quantity int) (*Cart, error)
+	UpdateCartItemQuantity(ctx context.Context, productID string, quantity int) (*Cart, error)
+	RemoveCartItem(ctx context.Context, productID string) (*Cart, error)
+	ClearCart(ctx context.Context) (bool, error)
+	CheckoutCart(ctx context.Context, redirectURL string) (*RedirectResponse, error)
+	MarkNotificationRead(ctx context.Context, id int) (bool, error)
+	MarkAllNotificationsRead(ctx context.Context) (int, error)
+}
+type ProductResolver interface {
+	Availability(ctx context.Context, obj *Product) (*InventoryAvailability, error)
 }
 type QueryResolver interface {
-	Accounts(ctx context.Context, pagination *PaginationInput, id *int) ([]*models.Account, error)
+	Accounts(ctx context.Context, pagination *PaginationInput, id *int) ([]*Account, error)
 	Product(ctx context.Context, pagination *PaginationInput, query *string, id *string, viewedProductsIds []*string, byAccountID *bool) ([]*Product, error)
+	MyCart(ctx context.Context) (*Cart, error)
+	Notifications(ctx context.Context, pagination *PaginationInput) ([]*Notification, error)
+	UnreadNotificationCount(ctx context.Context) (int, error)
 }
 
 type executableSchema struct {
@@ -176,6 +233,128 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AuthResponse.Token(childComplexity), true
+
+	case "Cart.accountId":
+		if e.complexity.Cart.AccountID == nil {
+			break
+		}
+
+		return e.complexity.Cart.AccountID(childComplexity), true
+
+	case "Cart.expiresAt":
+		if e.complexity.Cart.ExpiresAt == nil {
+			break
+		}
+
+		return e.complexity.Cart.ExpiresAt(childComplexity), true
+
+	case "Cart.items":
+		if e.complexity.Cart.Items == nil {
+			break
+		}
+
+		return e.complexity.Cart.Items(childComplexity), true
+
+	case "CartItem.product":
+		if e.complexity.CartItem.Product == nil {
+			break
+		}
+
+		return e.complexity.CartItem.Product(childComplexity), true
+
+	case "CartItem.quantity":
+		if e.complexity.CartItem.Quantity == nil {
+			break
+		}
+
+		return e.complexity.CartItem.Quantity(childComplexity), true
+
+	case "CartItem.reservationId":
+		if e.complexity.CartItem.ReservationID == nil {
+			break
+		}
+
+		return e.complexity.CartItem.ReservationID(childComplexity), true
+
+	case "CartItem.reservedUntil":
+		if e.complexity.CartItem.ReservedUntil == nil {
+			break
+		}
+
+		return e.complexity.CartItem.ReservedUntil(childComplexity), true
+
+	case "InventoryAvailability.availableQuantity":
+		if e.complexity.InventoryAvailability.AvailableQuantity == nil {
+			break
+		}
+
+		return e.complexity.InventoryAvailability.AvailableQuantity(childComplexity), true
+
+	case "InventoryAvailability.lowStock":
+		if e.complexity.InventoryAvailability.LowStock == nil {
+			break
+		}
+
+		return e.complexity.InventoryAvailability.LowStock(childComplexity), true
+
+	case "InventoryAvailability.productId":
+		if e.complexity.InventoryAvailability.ProductID == nil {
+			break
+		}
+
+		return e.complexity.InventoryAvailability.ProductID(childComplexity), true
+
+	case "InventoryAvailability.reorderLevel":
+		if e.complexity.InventoryAvailability.ReorderLevel == nil {
+			break
+		}
+
+		return e.complexity.InventoryAvailability.ReorderLevel(childComplexity), true
+
+	case "InventoryAvailability.reservedQuantity":
+		if e.complexity.InventoryAvailability.ReservedQuantity == nil {
+			break
+		}
+
+		return e.complexity.InventoryAvailability.ReservedQuantity(childComplexity), true
+
+	case "InventoryAvailability.totalQuantity":
+		if e.complexity.InventoryAvailability.TotalQuantity == nil {
+			break
+		}
+
+		return e.complexity.InventoryAvailability.TotalQuantity(childComplexity), true
+
+	case "Mutation.addCartItem":
+		if e.complexity.Mutation.AddCartItem == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addCartItem_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AddCartItem(childComplexity, args["productId"].(string), args["quantity"].(int)), true
+
+	case "Mutation.checkoutCart":
+		if e.complexity.Mutation.CheckoutCart == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_checkoutCart_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CheckoutCart(childComplexity, args["redirectUrl"].(string)), true
+
+	case "Mutation.clearCart":
+		if e.complexity.Mutation.ClearCart == nil {
+			break
+		}
+
+		return e.complexity.Mutation.ClearCart(childComplexity), true
 
 	case "Mutation.createCheckoutSession":
 		if e.complexity.Mutation.CreateCheckoutSession == nil {
@@ -249,6 +428,25 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.Login(childComplexity, args["account"].(LoginInput)), true
 
+	case "Mutation.markAllNotificationsRead":
+		if e.complexity.Mutation.MarkAllNotificationsRead == nil {
+			break
+		}
+
+		return e.complexity.Mutation.MarkAllNotificationsRead(childComplexity), true
+
+	case "Mutation.markNotificationRead":
+		if e.complexity.Mutation.MarkNotificationRead == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_markNotificationRead_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.MarkNotificationRead(childComplexity, args["id"].(int)), true
+
 	case "Mutation.register":
 		if e.complexity.Mutation.Register == nil {
 			break
@@ -261,6 +459,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.Register(childComplexity, args["account"].(RegisterInput)), true
 
+	case "Mutation.removeCartItem":
+		if e.complexity.Mutation.RemoveCartItem == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_removeCartItem_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RemoveCartItem(childComplexity, args["productId"].(string)), true
+
+	case "Mutation.updateCartItemQuantity":
+		if e.complexity.Mutation.UpdateCartItemQuantity == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateCartItemQuantity_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateCartItemQuantity(childComplexity, args["productId"].(string), args["quantity"].(int)), true
+
 	case "Mutation.updateProduct":
 		if e.complexity.Mutation.UpdateProduct == nil {
 			break
@@ -272,6 +494,74 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.UpdateProduct(childComplexity, args["product"].(UpdateProductInput)), true
+
+	case "Mutation.upsertProductStock":
+		if e.complexity.Mutation.UpsertProductStock == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_upsertProductStock_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpsertProductStock(childComplexity, args["input"].(UpsertProductStockInput)), true
+
+	case "Notification.createdAt":
+		if e.complexity.Notification.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.Notification.CreatedAt(childComplexity), true
+
+	case "Notification.eventType":
+		if e.complexity.Notification.EventType == nil {
+			break
+		}
+
+		return e.complexity.Notification.EventType(childComplexity), true
+
+	case "Notification.id":
+		if e.complexity.Notification.ID == nil {
+			break
+		}
+
+		return e.complexity.Notification.ID(childComplexity), true
+
+	case "Notification.isRead":
+		if e.complexity.Notification.IsRead == nil {
+			break
+		}
+
+		return e.complexity.Notification.IsRead(childComplexity), true
+
+	case "Notification.message":
+		if e.complexity.Notification.Message == nil {
+			break
+		}
+
+		return e.complexity.Notification.Message(childComplexity), true
+
+	case "Notification.metadataJson":
+		if e.complexity.Notification.MetadataJSON == nil {
+			break
+		}
+
+		return e.complexity.Notification.MetadataJSON(childComplexity), true
+
+	case "Notification.readAt":
+		if e.complexity.Notification.ReadAt == nil {
+			break
+		}
+
+		return e.complexity.Notification.ReadAt(childComplexity), true
+
+	case "Notification.title":
+		if e.complexity.Notification.Title == nil {
+			break
+		}
+
+		return e.complexity.Notification.Title(childComplexity), true
 
 	case "Order.createdAt":
 		if e.complexity.Order.CreatedAt == nil {
@@ -343,6 +633,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Product.AccountID(childComplexity), true
 
+	case "Product.availability":
+		if e.complexity.Product.Availability == nil {
+			break
+		}
+
+		return e.complexity.Product.Availability(childComplexity), true
+
 	case "Product.description":
 		if e.complexity.Product.Description == nil {
 			break
@@ -383,6 +680,25 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Accounts(childComplexity, args["pagination"].(*PaginationInput), args["id"].(*int)), true
 
+	case "Query.myCart":
+		if e.complexity.Query.MyCart == nil {
+			break
+		}
+
+		return e.complexity.Query.MyCart(childComplexity), true
+
+	case "Query.notifications":
+		if e.complexity.Query.Notifications == nil {
+			break
+		}
+
+		args, err := ec.field_Query_notifications_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Notifications(childComplexity, args["pagination"].(*PaginationInput)), true
+
 	case "Query.product":
 		if e.complexity.Query.Product == nil {
 			break
@@ -394,6 +710,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.Product(childComplexity, args["pagination"].(*PaginationInput), args["query"].(*string), args["id"].(*string), args["viewedProductsIds"].([]*string), args["byAccountId"].(*bool)), true
+
+	case "Query.unreadNotificationCount":
+		if e.complexity.Query.UnreadNotificationCount == nil {
+			break
+		}
+
+		return e.complexity.Query.UnreadNotificationCount(childComplexity), true
 
 	case "RedirectResponse.url":
 		if e.complexity.RedirectResponse.URL == nil {
@@ -420,6 +743,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputPaginationInput,
 		ec.unmarshalInputRegisterInput,
 		ec.unmarshalInputUpdateProductInput,
+		ec.unmarshalInputUpsertProductStockInput,
 	)
 	first := true
 
@@ -526,12 +850,46 @@ type Account {
     orders: [Order!]!
 }
 
+type InventoryAvailability {
+    productId: String!
+    totalQuantity: Int!
+    reservedQuantity: Int!
+    availableQuantity: Int!
+    reorderLevel: Int!
+    lowStock: Boolean!
+}
+
 type Product {
     id: String!
     name: String!
     description: String!
     price: Float!
     accountId: Int!
+    availability: InventoryAvailability
+}
+
+type CartItem {
+    product: Product!
+    quantity: Int!
+    reservationId: String!
+    reservedUntil: Time!
+}
+
+type Cart {
+    accountId: Int!
+    expiresAt: Time!
+    items: [CartItem!]!
+}
+
+type Notification {
+    id: Int!
+    eventType: String!
+    title: String!
+    message: String!
+    metadataJson: String!
+    isRead: Boolean!
+    createdAt: Time!
+    readAt: Time
 }
 
 type Order {
@@ -615,6 +973,12 @@ input CheckoutInput {
     orderId: Int!
 }
 
+input UpsertProductStockInput {
+    productId: String!
+    quantity: Int!
+    reorderLevel: Int!
+}
+
 type Mutation {
     register(account: RegisterInput!): AuthResponse
     login(account: LoginInput!): AuthResponse
@@ -624,11 +988,22 @@ type Mutation {
     createOrder(order: OrderInput!): Order
     createCustomerPortalSession(credentials: CustomerPortalSessionInput): RedirectResponse
     createCheckoutSession(details: CheckoutInput): RedirectResponse
+    upsertProductStock(input: UpsertProductStockInput!): InventoryAvailability!
+    addCartItem(productId: String!, quantity: Int!): Cart!
+    updateCartItemQuantity(productId: String!, quantity: Int!): Cart!
+    removeCartItem(productId: String!): Cart!
+    clearCart: Boolean!
+    checkoutCart(redirectUrl: String!): RedirectResponse!
+    markNotificationRead(id: Int!): Boolean!
+    markAllNotificationsRead: Int!
 }
 
 type Query{
     accounts(pagination: PaginationInput, id: Int): [Account!]!
     product(pagination: PaginationInput, query: String, id: String, viewedProductsIds: [String], byAccountId: Boolean): [Product!]!
+    myCart: Cart!
+    notifications(pagination: PaginationInput): [Notification!]!
+    unreadNotificationCount: Int!
 }
 `, BuiltIn: false},
 }
@@ -637,6 +1012,85 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Mutation_addCartItem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_addCartItem_argsProductID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["productId"] = arg0
+	arg1, err := ec.field_Mutation_addCartItem_argsQuantity(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["quantity"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_addCartItem_argsProductID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["productId"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("productId"))
+	if tmp, ok := rawArgs["productId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_addCartItem_argsQuantity(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int, error) {
+	if _, ok := rawArgs["quantity"]; !ok {
+		var zeroVal int
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("quantity"))
+	if tmp, ok := rawArgs["quantity"]; ok {
+		return ec.unmarshalNInt2int(ctx, tmp)
+	}
+
+	var zeroVal int
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_checkoutCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_checkoutCart_argsRedirectURL(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["redirectUrl"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_checkoutCart_argsRedirectURL(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["redirectUrl"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("redirectUrl"))
+	if tmp, ok := rawArgs["redirectUrl"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
 
 func (ec *executionContext) field_Mutation_createCheckoutSession_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
@@ -659,7 +1113,7 @@ func (ec *executionContext) field_Mutation_createCheckoutSession_argsDetails(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("details"))
 	if tmp, ok := rawArgs["details"]; ok {
-		return ec.unmarshalOCheckoutInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCheckoutInput(ctx, tmp)
+		return ec.unmarshalOCheckoutInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCheckoutInput(ctx, tmp)
 	}
 
 	var zeroVal *CheckoutInput
@@ -687,7 +1141,7 @@ func (ec *executionContext) field_Mutation_createCustomerPortalSession_argsCrede
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("credentials"))
 	if tmp, ok := rawArgs["credentials"]; ok {
-		return ec.unmarshalOCustomerPortalSessionInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCustomerPortalSessionInput(ctx, tmp)
+		return ec.unmarshalOCustomerPortalSessionInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCustomerPortalSessionInput(ctx, tmp)
 	}
 
 	var zeroVal *CustomerPortalSessionInput
@@ -715,7 +1169,7 @@ func (ec *executionContext) field_Mutation_createOrder_argsOrder(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("order"))
 	if tmp, ok := rawArgs["order"]; ok {
-		return ec.unmarshalNOrderInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderInput(ctx, tmp)
+		return ec.unmarshalNOrderInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderInput(ctx, tmp)
 	}
 
 	var zeroVal OrderInput
@@ -743,7 +1197,7 @@ func (ec *executionContext) field_Mutation_createProduct_argsProduct(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("product"))
 	if tmp, ok := rawArgs["product"]; ok {
-		return ec.unmarshalNCreateProductInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCreateProductInput(ctx, tmp)
+		return ec.unmarshalNCreateProductInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCreateProductInput(ctx, tmp)
 	}
 
 	var zeroVal CreateProductInput
@@ -799,10 +1253,38 @@ func (ec *executionContext) field_Mutation_login_argsAccount(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("account"))
 	if tmp, ok := rawArgs["account"]; ok {
-		return ec.unmarshalNLoginInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐLoginInput(ctx, tmp)
+		return ec.unmarshalNLoginInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐLoginInput(ctx, tmp)
 	}
 
 	var zeroVal LoginInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_markNotificationRead_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_markNotificationRead_argsID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_markNotificationRead_argsID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int, error) {
+	if _, ok := rawArgs["id"]; !ok {
+		var zeroVal int
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+	if tmp, ok := rawArgs["id"]; ok {
+		return ec.unmarshalNInt2int(ctx, tmp)
+	}
+
+	var zeroVal int
 	return zeroVal, nil
 }
 
@@ -827,10 +1309,89 @@ func (ec *executionContext) field_Mutation_register_argsAccount(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("account"))
 	if tmp, ok := rawArgs["account"]; ok {
-		return ec.unmarshalNRegisterInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐRegisterInput(ctx, tmp)
+		return ec.unmarshalNRegisterInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRegisterInput(ctx, tmp)
 	}
 
 	var zeroVal RegisterInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_removeCartItem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_removeCartItem_argsProductID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["productId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_removeCartItem_argsProductID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["productId"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("productId"))
+	if tmp, ok := rawArgs["productId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_updateCartItemQuantity_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_updateCartItemQuantity_argsProductID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["productId"] = arg0
+	arg1, err := ec.field_Mutation_updateCartItemQuantity_argsQuantity(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["quantity"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_updateCartItemQuantity_argsProductID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["productId"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("productId"))
+	if tmp, ok := rawArgs["productId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_updateCartItemQuantity_argsQuantity(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int, error) {
+	if _, ok := rawArgs["quantity"]; !ok {
+		var zeroVal int
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("quantity"))
+	if tmp, ok := rawArgs["quantity"]; ok {
+		return ec.unmarshalNInt2int(ctx, tmp)
+	}
+
+	var zeroVal int
 	return zeroVal, nil
 }
 
@@ -855,10 +1416,38 @@ func (ec *executionContext) field_Mutation_updateProduct_argsProduct(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("product"))
 	if tmp, ok := rawArgs["product"]; ok {
-		return ec.unmarshalNUpdateProductInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐUpdateProductInput(ctx, tmp)
+		return ec.unmarshalNUpdateProductInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐUpdateProductInput(ctx, tmp)
 	}
 
 	var zeroVal UpdateProductInput
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_upsertProductStock_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_upsertProductStock_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_upsertProductStock_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (UpsertProductStockInput, error) {
+	if _, ok := rawArgs["input"]; !ok {
+		var zeroVal UpsertProductStockInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalNUpsertProductStockInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐUpsertProductStockInput(ctx, tmp)
+	}
+
+	var zeroVal UpsertProductStockInput
 	return zeroVal, nil
 }
 
@@ -916,7 +1505,7 @@ func (ec *executionContext) field_Query_accounts_argsPagination(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("pagination"))
 	if tmp, ok := rawArgs["pagination"]; ok {
-		return ec.unmarshalOPaginationInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐPaginationInput(ctx, tmp)
+		return ec.unmarshalOPaginationInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐPaginationInput(ctx, tmp)
 	}
 
 	var zeroVal *PaginationInput
@@ -938,6 +1527,34 @@ func (ec *executionContext) field_Query_accounts_argsID(
 	}
 
 	var zeroVal *int
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_notifications_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_notifications_argsPagination(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["pagination"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_notifications_argsPagination(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*PaginationInput, error) {
+	if _, ok := rawArgs["pagination"]; !ok {
+		var zeroVal *PaginationInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("pagination"))
+	if tmp, ok := rawArgs["pagination"]; ok {
+		return ec.unmarshalOPaginationInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐPaginationInput(ctx, tmp)
+	}
+
+	var zeroVal *PaginationInput
 	return zeroVal, nil
 }
 
@@ -982,7 +1599,7 @@ func (ec *executionContext) field_Query_product_argsPagination(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("pagination"))
 	if tmp, ok := rawArgs["pagination"]; ok {
-		return ec.unmarshalOPaginationInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐPaginationInput(ctx, tmp)
+		return ec.unmarshalOPaginationInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐPaginationInput(ctx, tmp)
 	}
 
 	var zeroVal *PaginationInput
@@ -1181,7 +1798,7 @@ func (ec *executionContext) field___Type_fields_argsIncludeDeprecated(
 
 // region    **************************** field.gotpl *****************************
 
-func (ec *executionContext) _Account_id(ctx context.Context, field graphql.CollectedField, obj *models.Account) (ret graphql.Marshaler) {
+func (ec *executionContext) _Account_id(ctx context.Context, field graphql.CollectedField, obj *Account) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Account_id(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -1195,7 +1812,7 @@ func (ec *executionContext) _Account_id(ctx context.Context, field graphql.Colle
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Account().ID(rctx, obj)
+		return obj.ID, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1216,8 +1833,8 @@ func (ec *executionContext) fieldContext_Account_id(_ context.Context, field gra
 	fc = &graphql.FieldContext{
 		Object:     "Account",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Int does not have child fields")
 		},
@@ -1225,7 +1842,7 @@ func (ec *executionContext) fieldContext_Account_id(_ context.Context, field gra
 	return fc, nil
 }
 
-func (ec *executionContext) _Account_name(ctx context.Context, field graphql.CollectedField, obj *models.Account) (ret graphql.Marshaler) {
+func (ec *executionContext) _Account_name(ctx context.Context, field graphql.CollectedField, obj *Account) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Account_name(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -1269,7 +1886,7 @@ func (ec *executionContext) fieldContext_Account_name(_ context.Context, field g
 	return fc, nil
 }
 
-func (ec *executionContext) _Account_email(ctx context.Context, field graphql.CollectedField, obj *models.Account) (ret graphql.Marshaler) {
+func (ec *executionContext) _Account_email(ctx context.Context, field graphql.CollectedField, obj *Account) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Account_email(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -1313,7 +1930,7 @@ func (ec *executionContext) fieldContext_Account_email(_ context.Context, field 
 	return fc, nil
 }
 
-func (ec *executionContext) _Account_orders(ctx context.Context, field graphql.CollectedField, obj *models.Account) (ret graphql.Marshaler) {
+func (ec *executionContext) _Account_orders(ctx context.Context, field graphql.CollectedField, obj *Account) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Account_orders(ctx, field)
 	if err != nil {
 		return graphql.Null
@@ -1341,7 +1958,7 @@ func (ec *executionContext) _Account_orders(ctx context.Context, field graphql.C
 	}
 	res := resTmp.([]*Order)
 	fc.Result = res
-	return ec.marshalNOrder2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderᚄ(ctx, field.Selections, res)
+	return ec.marshalNOrder2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Account_orders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1411,6 +2028,602 @@ func (ec *executionContext) fieldContext_AuthResponse_token(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Cart_accountId(ctx context.Context, field graphql.CollectedField, obj *Cart) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Cart_accountId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AccountID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Cart_accountId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Cart",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Cart_expiresAt(ctx context.Context, field graphql.CollectedField, obj *Cart) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Cart_expiresAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ExpiresAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Cart_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Cart",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Cart_items(ctx context.Context, field graphql.CollectedField, obj *Cart) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Cart_items(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Items, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*CartItem)
+	fc.Result = res
+	return ec.marshalNCartItem2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCartItemᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Cart_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Cart",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "product":
+				return ec.fieldContext_CartItem_product(ctx, field)
+			case "quantity":
+				return ec.fieldContext_CartItem_quantity(ctx, field)
+			case "reservationId":
+				return ec.fieldContext_CartItem_reservationId(ctx, field)
+			case "reservedUntil":
+				return ec.fieldContext_CartItem_reservedUntil(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CartItem", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItem_product(ctx context.Context, field graphql.CollectedField, obj *CartItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CartItem_product(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Product, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*Product)
+	fc.Result = res
+	return ec.marshalNProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProduct(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CartItem_product(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Product_id(ctx, field)
+			case "name":
+				return ec.fieldContext_Product_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Product_description(ctx, field)
+			case "price":
+				return ec.fieldContext_Product_price(ctx, field)
+			case "accountId":
+				return ec.fieldContext_Product_accountId(ctx, field)
+			case "availability":
+				return ec.fieldContext_Product_availability(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Product", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItem_quantity(ctx context.Context, field graphql.CollectedField, obj *CartItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CartItem_quantity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Quantity, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CartItem_quantity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItem_reservationId(ctx context.Context, field graphql.CollectedField, obj *CartItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CartItem_reservationId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReservationID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CartItem_reservationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CartItem_reservedUntil(ctx context.Context, field graphql.CollectedField, obj *CartItem) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CartItem_reservedUntil(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReservedUntil, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CartItem_reservedUntil(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryAvailability_productId(ctx context.Context, field graphql.CollectedField, obj *InventoryAvailability) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InventoryAvailability_productId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ProductID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InventoryAvailability_productId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryAvailability",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryAvailability_totalQuantity(ctx context.Context, field graphql.CollectedField, obj *InventoryAvailability) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InventoryAvailability_totalQuantity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalQuantity, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InventoryAvailability_totalQuantity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryAvailability",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryAvailability_reservedQuantity(ctx context.Context, field graphql.CollectedField, obj *InventoryAvailability) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InventoryAvailability_reservedQuantity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReservedQuantity, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InventoryAvailability_reservedQuantity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryAvailability",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryAvailability_availableQuantity(ctx context.Context, field graphql.CollectedField, obj *InventoryAvailability) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InventoryAvailability_availableQuantity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AvailableQuantity, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InventoryAvailability_availableQuantity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryAvailability",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryAvailability_reorderLevel(ctx context.Context, field graphql.CollectedField, obj *InventoryAvailability) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InventoryAvailability_reorderLevel(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReorderLevel, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InventoryAvailability_reorderLevel(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryAvailability",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryAvailability_lowStock(ctx context.Context, field graphql.CollectedField, obj *InventoryAvailability) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InventoryAvailability_lowStock(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LowStock, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InventoryAvailability_lowStock(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryAvailability",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_register(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Mutation_register(ctx, field)
 	if err != nil {
@@ -1436,7 +2649,7 @@ func (ec *executionContext) _Mutation_register(ctx context.Context, field graphq
 	}
 	res := resTmp.(*AuthResponse)
 	fc.Result = res
-	return ec.marshalOAuthResponse2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐAuthResponse(ctx, field.Selections, res)
+	return ec.marshalOAuthResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐAuthResponse(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_register(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1492,7 +2705,7 @@ func (ec *executionContext) _Mutation_login(ctx context.Context, field graphql.C
 	}
 	res := resTmp.(*AuthResponse)
 	fc.Result = res
-	return ec.marshalOAuthResponse2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐAuthResponse(ctx, field.Selections, res)
+	return ec.marshalOAuthResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐAuthResponse(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_login(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1548,7 +2761,7 @@ func (ec *executionContext) _Mutation_createProduct(ctx context.Context, field g
 	}
 	res := resTmp.(*Product)
 	fc.Result = res
-	return ec.marshalOProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐProduct(ctx, field.Selections, res)
+	return ec.marshalOProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProduct(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_createProduct(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1569,6 +2782,8 @@ func (ec *executionContext) fieldContext_Mutation_createProduct(ctx context.Cont
 				return ec.fieldContext_Product_price(ctx, field)
 			case "accountId":
 				return ec.fieldContext_Product_accountId(ctx, field)
+			case "availability":
+				return ec.fieldContext_Product_availability(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Product", field.Name)
 		},
@@ -1612,7 +2827,7 @@ func (ec *executionContext) _Mutation_updateProduct(ctx context.Context, field g
 	}
 	res := resTmp.(*Product)
 	fc.Result = res
-	return ec.marshalOProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐProduct(ctx, field.Selections, res)
+	return ec.marshalOProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProduct(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_updateProduct(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1633,6 +2848,8 @@ func (ec *executionContext) fieldContext_Mutation_updateProduct(ctx context.Cont
 				return ec.fieldContext_Product_price(ctx, field)
 			case "accountId":
 				return ec.fieldContext_Product_accountId(ctx, field)
+			case "availability":
+				return ec.fieldContext_Product_availability(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Product", field.Name)
 		},
@@ -1728,7 +2945,7 @@ func (ec *executionContext) _Mutation_createOrder(ctx context.Context, field gra
 	}
 	res := resTmp.(*Order)
 	fc.Result = res
-	return ec.marshalOOrder2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrder(ctx, field.Selections, res)
+	return ec.marshalOOrder2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrder(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_createOrder(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1790,7 +3007,7 @@ func (ec *executionContext) _Mutation_createCustomerPortalSession(ctx context.Co
 	}
 	res := resTmp.(*RedirectResponse)
 	fc.Result = res
-	return ec.marshalORedirectResponse2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx, field.Selections, res)
+	return ec.marshalORedirectResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_createCustomerPortalSession(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1846,7 +3063,7 @@ func (ec *executionContext) _Mutation_createCheckoutSession(ctx context.Context,
 	}
 	res := resTmp.(*RedirectResponse)
 	fc.Result = res
-	return ec.marshalORedirectResponse2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx, field.Selections, res)
+	return ec.marshalORedirectResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_createCheckoutSession(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -1873,6 +3090,815 @@ func (ec *executionContext) fieldContext_Mutation_createCheckoutSession(ctx cont
 	if fc.Args, err = ec.field_Mutation_createCheckoutSession_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_upsertProductStock(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_upsertProductStock(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpsertProductStock(rctx, fc.Args["input"].(UpsertProductStockInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*InventoryAvailability)
+	fc.Result = res
+	return ec.marshalNInventoryAvailability2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐInventoryAvailability(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_upsertProductStock(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "productId":
+				return ec.fieldContext_InventoryAvailability_productId(ctx, field)
+			case "totalQuantity":
+				return ec.fieldContext_InventoryAvailability_totalQuantity(ctx, field)
+			case "reservedQuantity":
+				return ec.fieldContext_InventoryAvailability_reservedQuantity(ctx, field)
+			case "availableQuantity":
+				return ec.fieldContext_InventoryAvailability_availableQuantity(ctx, field)
+			case "reorderLevel":
+				return ec.fieldContext_InventoryAvailability_reorderLevel(ctx, field)
+			case "lowStock":
+				return ec.fieldContext_InventoryAvailability_lowStock(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type InventoryAvailability", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_upsertProductStock_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addCartItem(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_addCartItem(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().AddCartItem(rctx, fc.Args["productId"].(string), fc.Args["quantity"].(int))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*Cart)
+	fc.Result = res
+	return ec.marshalNCart2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCart(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addCartItem(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "accountId":
+				return ec.fieldContext_Cart_accountId(ctx, field)
+			case "expiresAt":
+				return ec.fieldContext_Cart_expiresAt(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addCartItem_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateCartItemQuantity(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_updateCartItemQuantity(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpdateCartItemQuantity(rctx, fc.Args["productId"].(string), fc.Args["quantity"].(int))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*Cart)
+	fc.Result = res
+	return ec.marshalNCart2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCart(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateCartItemQuantity(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "accountId":
+				return ec.fieldContext_Cart_accountId(ctx, field)
+			case "expiresAt":
+				return ec.fieldContext_Cart_expiresAt(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateCartItemQuantity_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_removeCartItem(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_removeCartItem(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RemoveCartItem(rctx, fc.Args["productId"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*Cart)
+	fc.Result = res
+	return ec.marshalNCart2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCart(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_removeCartItem(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "accountId":
+				return ec.fieldContext_Cart_accountId(ctx, field)
+			case "expiresAt":
+				return ec.fieldContext_Cart_expiresAt(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_removeCartItem_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_clearCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_clearCart(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().ClearCart(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_clearCart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_checkoutCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_checkoutCart(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().CheckoutCart(rctx, fc.Args["redirectUrl"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*RedirectResponse)
+	fc.Result = res
+	return ec.marshalNRedirectResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_checkoutCart(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "url":
+				return ec.fieldContext_RedirectResponse_url(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type RedirectResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_checkoutCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_markNotificationRead(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_markNotificationRead(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().MarkNotificationRead(rctx, fc.Args["id"].(int))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_markNotificationRead(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_markNotificationRead_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_markAllNotificationsRead(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_markAllNotificationsRead(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().MarkAllNotificationsRead(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_markAllNotificationsRead(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_id(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_eventType(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_eventType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.EventType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_eventType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_title(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_title(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Title, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_message(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_message(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_metadataJson(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_metadataJson(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.MetadataJSON, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_metadataJson(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_isRead(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_isRead(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsRead, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_isRead(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_createdAt(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_readAt(ctx context.Context, field graphql.CollectedField, obj *Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_readAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReadAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*time.Time)
+	fc.Result = res
+	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_readAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
 	}
 	return fc, nil
 }
@@ -2037,7 +4063,7 @@ func (ec *executionContext) _Order_products(ctx context.Context, field graphql.C
 	}
 	res := resTmp.([]*OrderedProduct)
 	fc.Result = res
-	return ec.marshalNOrderedProduct2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProductᚄ(ctx, field.Selections, res)
+	return ec.marshalNOrderedProduct2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProductᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Order_products(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2505,6 +4531,61 @@ func (ec *executionContext) fieldContext_Product_accountId(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _Product_availability(ctx context.Context, field graphql.CollectedField, obj *Product) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Product_availability(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Product().Availability(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*InventoryAvailability)
+	fc.Result = res
+	return ec.marshalOInventoryAvailability2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐInventoryAvailability(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Product_availability(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Product",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "productId":
+				return ec.fieldContext_InventoryAvailability_productId(ctx, field)
+			case "totalQuantity":
+				return ec.fieldContext_InventoryAvailability_totalQuantity(ctx, field)
+			case "reservedQuantity":
+				return ec.fieldContext_InventoryAvailability_reservedQuantity(ctx, field)
+			case "availableQuantity":
+				return ec.fieldContext_InventoryAvailability_availableQuantity(ctx, field)
+			case "reorderLevel":
+				return ec.fieldContext_InventoryAvailability_reorderLevel(ctx, field)
+			case "lowStock":
+				return ec.fieldContext_InventoryAvailability_lowStock(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type InventoryAvailability", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_accounts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_accounts(ctx, field)
 	if err != nil {
@@ -2531,9 +4612,9 @@ func (ec *executionContext) _Query_accounts(ctx context.Context, field graphql.C
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*models.Account)
+	res := resTmp.([]*Account)
 	fc.Result = res
-	return ec.marshalNAccount2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋmodelsᚐAccountᚄ(ctx, field.Selections, res)
+	return ec.marshalNAccount2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐAccountᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_accounts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2598,7 +4679,7 @@ func (ec *executionContext) _Query_product(ctx context.Context, field graphql.Co
 	}
 	res := resTmp.([]*Product)
 	fc.Result = res
-	return ec.marshalNProduct2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐProductᚄ(ctx, field.Selections, res)
+	return ec.marshalNProduct2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProductᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_product(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2619,6 +4700,8 @@ func (ec *executionContext) fieldContext_Query_product(ctx context.Context, fiel
 				return ec.fieldContext_Product_price(ctx, field)
 			case "accountId":
 				return ec.fieldContext_Product_accountId(ctx, field)
+			case "availability":
+				return ec.fieldContext_Product_availability(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Product", field.Name)
 		},
@@ -2633,6 +4716,175 @@ func (ec *executionContext) fieldContext_Query_product(ctx context.Context, fiel
 	if fc.Args, err = ec.field_Query_product_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_myCart(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().MyCart(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*Cart)
+	fc.Result = res
+	return ec.marshalNCart2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCart(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_myCart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "accountId":
+				return ec.fieldContext_Cart_accountId(ctx, field)
+			case "expiresAt":
+				return ec.fieldContext_Cart_expiresAt(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_notifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_notifications(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Notifications(rctx, fc.Args["pagination"].(*PaginationInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*Notification)
+	fc.Result = res
+	return ec.marshalNNotification2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐNotificationᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_notifications(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Notification_id(ctx, field)
+			case "eventType":
+				return ec.fieldContext_Notification_eventType(ctx, field)
+			case "title":
+				return ec.fieldContext_Notification_title(ctx, field)
+			case "message":
+				return ec.fieldContext_Notification_message(ctx, field)
+			case "metadataJson":
+				return ec.fieldContext_Notification_metadataJson(ctx, field)
+			case "isRead":
+				return ec.fieldContext_Notification_isRead(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Notification_createdAt(ctx, field)
+			case "readAt":
+				return ec.fieldContext_Notification_readAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_notifications_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_unreadNotificationCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_unreadNotificationCount(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().UnreadNotificationCount(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_unreadNotificationCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
 	}
 	return fc, nil
 }
@@ -4807,7 +7059,7 @@ func (ec *executionContext) unmarshalInputCheckoutInput(ctx context.Context, obj
 			it.RedirectURL = data
 		case "products":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("products"))
-			data, err := ec.unmarshalNCheckoutProductInput2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx, v)
+			data, err := ec.unmarshalNCheckoutProductInput2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4991,7 +7243,7 @@ func (ec *executionContext) unmarshalInputOrderInput(ctx context.Context, obj an
 		switch k {
 		case "products":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("products"))
-			data, err := ec.unmarshalNOrderedProductInput2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx, v)
+			data, err := ec.unmarshalNOrderedProductInput2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -5159,6 +7411,47 @@ func (ec *executionContext) unmarshalInputUpdateProductInput(ctx context.Context
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputUpsertProductStockInput(ctx context.Context, obj any) (UpsertProductStockInput, error) {
+	var it UpsertProductStockInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"productId", "quantity", "reorderLevel"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "productId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("productId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProductID = data
+		case "quantity":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("quantity"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Quantity = data
+		case "reorderLevel":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reorderLevel"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReorderLevel = data
+		}
+	}
+
+	return it, nil
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -5169,7 +7462,7 @@ func (ec *executionContext) unmarshalInputUpdateProductInput(ctx context.Context
 
 var accountImplementors = []string{"Account"}
 
-func (ec *executionContext) _Account(ctx context.Context, sel ast.SelectionSet, obj *models.Account) graphql.Marshaler {
+func (ec *executionContext) _Account(ctx context.Context, sel ast.SelectionSet, obj *Account) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, accountImplementors)
 
 	out := graphql.NewFieldSet(fields)
@@ -5179,41 +7472,10 @@ func (ec *executionContext) _Account(ctx context.Context, sel ast.SelectionSet, 
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Account")
 		case "id":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Account_id(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
+			out.Values[i] = ec._Account_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
 			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "name":
 			out.Values[i] = ec._Account_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -5322,6 +7584,173 @@ func (ec *executionContext) _AuthResponse(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var cartImplementors = []string{"Cart"}
+
+func (ec *executionContext) _Cart(ctx context.Context, sel ast.SelectionSet, obj *Cart) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cartImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Cart")
+		case "accountId":
+			out.Values[i] = ec._Cart_accountId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._Cart_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "items":
+			out.Values[i] = ec._Cart_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var cartItemImplementors = []string{"CartItem"}
+
+func (ec *executionContext) _CartItem(ctx context.Context, sel ast.SelectionSet, obj *CartItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cartItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CartItem")
+		case "product":
+			out.Values[i] = ec._CartItem_product(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "quantity":
+			out.Values[i] = ec._CartItem_quantity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reservationId":
+			out.Values[i] = ec._CartItem_reservationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reservedUntil":
+			out.Values[i] = ec._CartItem_reservedUntil(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var inventoryAvailabilityImplementors = []string{"InventoryAvailability"}
+
+func (ec *executionContext) _InventoryAvailability(ctx context.Context, sel ast.SelectionSet, obj *InventoryAvailability) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryAvailabilityImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryAvailability")
+		case "productId":
+			out.Values[i] = ec._InventoryAvailability_productId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalQuantity":
+			out.Values[i] = ec._InventoryAvailability_totalQuantity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reservedQuantity":
+			out.Values[i] = ec._InventoryAvailability_reservedQuantity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "availableQuantity":
+			out.Values[i] = ec._InventoryAvailability_availableQuantity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reorderLevel":
+			out.Values[i] = ec._InventoryAvailability_reorderLevel(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lowStock":
+			out.Values[i] = ec._InventoryAvailability_lowStock(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -5373,6 +7802,133 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createCheckoutSession(ctx, field)
 			})
+		case "upsertProductStock":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_upsertProductStock(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addCartItem":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addCartItem(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateCartItemQuantity":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateCartItemQuantity(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "removeCartItem":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_removeCartItem(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clearCart":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_clearCart(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "checkoutCart":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_checkoutCart(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "markNotificationRead":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_markNotificationRead(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "markAllNotificationsRead":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_markAllNotificationsRead(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var notificationImplementors = []string{"Notification"}
+
+func (ec *executionContext) _Notification(ctx context.Context, sel ast.SelectionSet, obj *Notification) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Notification")
+		case "id":
+			out.Values[i] = ec._Notification_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "eventType":
+			out.Values[i] = ec._Notification_eventType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._Notification_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._Notification_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "metadataJson":
+			out.Values[i] = ec._Notification_metadataJson(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isRead":
+			out.Values[i] = ec._Notification_isRead(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Notification_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "readAt":
+			out.Values[i] = ec._Notification_readAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5523,28 +8079,61 @@ func (ec *executionContext) _Product(ctx context.Context, sel ast.SelectionSet, 
 		case "id":
 			out.Values[i] = ec._Product_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "name":
 			out.Values[i] = ec._Product_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "description":
 			out.Values[i] = ec._Product_description(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "price":
 			out.Values[i] = ec._Product_price(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "accountId":
 			out.Values[i] = ec._Product_accountId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "availability":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Product_availability(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5619,6 +8208,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_product(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "myCart":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_myCart(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "notifications":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_notifications(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "unreadNotificationCount":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_unreadNotificationCount(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -6036,7 +8691,7 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
-func (ec *executionContext) marshalNAccount2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋmodelsᚐAccountᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.Account) graphql.Marshaler {
+func (ec *executionContext) marshalNAccount2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐAccountᚄ(ctx context.Context, sel ast.SelectionSet, v []*Account) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -6060,7 +8715,7 @@ func (ec *executionContext) marshalNAccount2ᚕᚖgithubᚗcomᚋrasadovᚋEcomm
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNAccount2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋmodelsᚐAccount(ctx, sel, v[i])
+			ret[i] = ec.marshalNAccount2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐAccount(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -6080,7 +8735,7 @@ func (ec *executionContext) marshalNAccount2ᚕᚖgithubᚗcomᚋrasadovᚋEcomm
 	return ret
 }
 
-func (ec *executionContext) marshalNAccount2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋmodelsᚐAccount(ctx context.Context, sel ast.SelectionSet, v *models.Account) graphql.Marshaler {
+func (ec *executionContext) marshalNAccount2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐAccount(ctx context.Context, sel ast.SelectionSet, v *Account) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -6105,14 +8760,82 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) unmarshalNCheckoutProductInput2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx context.Context, v any) ([]*CheckoutProductInput, error) {
+func (ec *executionContext) marshalNCart2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCart(ctx context.Context, sel ast.SelectionSet, v Cart) graphql.Marshaler {
+	return ec._Cart(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCart2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCart(ctx context.Context, sel ast.SelectionSet, v *Cart) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Cart(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCartItem2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCartItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*CartItem) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNCartItem2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCartItem(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCartItem2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCartItem(ctx context.Context, sel ast.SelectionSet, v *CartItem) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CartItem(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCheckoutProductInput2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx context.Context, v any) ([]*CheckoutProductInput, error) {
 	var vSlice []any
 	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]*CheckoutProductInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalOCheckoutProductInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOCheckoutProductInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -6120,7 +8843,7 @@ func (ec *executionContext) unmarshalNCheckoutProductInput2ᚕᚖgithubᚗcomᚋ
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNCreateProductInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCreateProductInput(ctx context.Context, v any) (CreateProductInput, error) {
+func (ec *executionContext) unmarshalNCreateProductInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCreateProductInput(ctx context.Context, v any) (CreateProductInput, error) {
 	res, err := ec.unmarshalInputCreateProductInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -6155,12 +8878,26 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
-func (ec *executionContext) unmarshalNLoginInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐLoginInput(ctx context.Context, v any) (LoginInput, error) {
+func (ec *executionContext) marshalNInventoryAvailability2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐInventoryAvailability(ctx context.Context, sel ast.SelectionSet, v InventoryAvailability) graphql.Marshaler {
+	return ec._InventoryAvailability(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNInventoryAvailability2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐInventoryAvailability(ctx context.Context, sel ast.SelectionSet, v *InventoryAvailability) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryAvailability(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNLoginInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐLoginInput(ctx context.Context, v any) (LoginInput, error) {
 	res, err := ec.unmarshalInputLoginInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNOrder2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderᚄ(ctx context.Context, sel ast.SelectionSet, v []*Order) graphql.Marshaler {
+func (ec *executionContext) marshalNNotification2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐNotificationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Notification) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -6184,7 +8921,7 @@ func (ec *executionContext) marshalNOrder2ᚕᚖgithubᚗcomᚋrasadovᚋEcommer
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNOrder2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrder(ctx, sel, v[i])
+			ret[i] = ec.marshalNNotification2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐNotification(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -6204,7 +8941,61 @@ func (ec *executionContext) marshalNOrder2ᚕᚖgithubᚗcomᚋrasadovᚋEcommer
 	return ret
 }
 
-func (ec *executionContext) marshalNOrder2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrder(ctx context.Context, sel ast.SelectionSet, v *Order) graphql.Marshaler {
+func (ec *executionContext) marshalNNotification2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐNotification(ctx context.Context, sel ast.SelectionSet, v *Notification) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Notification(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOrder2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderᚄ(ctx context.Context, sel ast.SelectionSet, v []*Order) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNOrder2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrder(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNOrder2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrder(ctx context.Context, sel ast.SelectionSet, v *Order) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -6214,12 +9005,12 @@ func (ec *executionContext) marshalNOrder2ᚖgithubᚗcomᚋrasadovᚋEcommerceA
 	return ec._Order(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNOrderInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderInput(ctx context.Context, v any) (OrderInput, error) {
+func (ec *executionContext) unmarshalNOrderInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderInput(ctx context.Context, v any) (OrderInput, error) {
 	res, err := ec.unmarshalInputOrderInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNOrderedProduct2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProductᚄ(ctx context.Context, sel ast.SelectionSet, v []*OrderedProduct) graphql.Marshaler {
+func (ec *executionContext) marshalNOrderedProduct2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProductᚄ(ctx context.Context, sel ast.SelectionSet, v []*OrderedProduct) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -6243,7 +9034,7 @@ func (ec *executionContext) marshalNOrderedProduct2ᚕᚖgithubᚗcomᚋrasadov�
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNOrderedProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProduct(ctx, sel, v[i])
+			ret[i] = ec.marshalNOrderedProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProduct(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -6263,7 +9054,7 @@ func (ec *executionContext) marshalNOrderedProduct2ᚕᚖgithubᚗcomᚋrasadov�
 	return ret
 }
 
-func (ec *executionContext) marshalNOrderedProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProduct(ctx context.Context, sel ast.SelectionSet, v *OrderedProduct) graphql.Marshaler {
+func (ec *executionContext) marshalNOrderedProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProduct(ctx context.Context, sel ast.SelectionSet, v *OrderedProduct) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -6273,14 +9064,14 @@ func (ec *executionContext) marshalNOrderedProduct2ᚖgithubᚗcomᚋrasadovᚋE
 	return ec._OrderedProduct(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNOrderedProductInput2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx context.Context, v any) ([]*OrderedProductInput, error) {
+func (ec *executionContext) unmarshalNOrderedProductInput2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx context.Context, v any) ([]*OrderedProductInput, error) {
 	var vSlice []any
 	vSlice = graphql.CoerceList(v)
 	var err error
 	res := make([]*OrderedProductInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalOOrderedProductInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOOrderedProductInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -6288,7 +9079,7 @@ func (ec *executionContext) unmarshalNOrderedProductInput2ᚕᚖgithubᚗcomᚋr
 	return res, nil
 }
 
-func (ec *executionContext) marshalNProduct2ᚕᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐProductᚄ(ctx context.Context, sel ast.SelectionSet, v []*Product) graphql.Marshaler {
+func (ec *executionContext) marshalNProduct2ᚕᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProductᚄ(ctx context.Context, sel ast.SelectionSet, v []*Product) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -6312,7 +9103,7 @@ func (ec *executionContext) marshalNProduct2ᚕᚖgithubᚗcomᚋrasadovᚋEcomm
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐProduct(ctx, sel, v[i])
+			ret[i] = ec.marshalNProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProduct(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -6332,7 +9123,7 @@ func (ec *executionContext) marshalNProduct2ᚕᚖgithubᚗcomᚋrasadovᚋEcomm
 	return ret
 }
 
-func (ec *executionContext) marshalNProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐProduct(ctx context.Context, sel ast.SelectionSet, v *Product) graphql.Marshaler {
+func (ec *executionContext) marshalNProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProduct(ctx context.Context, sel ast.SelectionSet, v *Product) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -6342,7 +9133,21 @@ func (ec *executionContext) marshalNProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerc
 	return ec._Product(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNRegisterInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐRegisterInput(ctx context.Context, v any) (RegisterInput, error) {
+func (ec *executionContext) marshalNRedirectResponse2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx context.Context, sel ast.SelectionSet, v RedirectResponse) graphql.Marshaler {
+	return ec._RedirectResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRedirectResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx context.Context, sel ast.SelectionSet, v *RedirectResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._RedirectResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRegisterInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRegisterInput(ctx context.Context, v any) (RegisterInput, error) {
 	res, err := ec.unmarshalInputRegisterInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -6377,8 +9182,13 @@ func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel as
 	return res
 }
 
-func (ec *executionContext) unmarshalNUpdateProductInput2githubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐUpdateProductInput(ctx context.Context, v any) (UpdateProductInput, error) {
+func (ec *executionContext) unmarshalNUpdateProductInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐUpdateProductInput(ctx context.Context, v any) (UpdateProductInput, error) {
 	res, err := ec.unmarshalInputUpdateProductInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNUpsertProductStockInput2githubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐUpsertProductStockInput(ctx context.Context, v any) (UpsertProductStockInput, error) {
+	res, err := ec.unmarshalInputUpsertProductStockInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -6633,7 +9443,7 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
-func (ec *executionContext) marshalOAuthResponse2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐAuthResponse(ctx context.Context, sel ast.SelectionSet, v *AuthResponse) graphql.Marshaler {
+func (ec *executionContext) marshalOAuthResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐAuthResponse(ctx context.Context, sel ast.SelectionSet, v *AuthResponse) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -6666,7 +9476,7 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
-func (ec *executionContext) unmarshalOCheckoutInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCheckoutInput(ctx context.Context, v any) (*CheckoutInput, error) {
+func (ec *executionContext) unmarshalOCheckoutInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCheckoutInput(ctx context.Context, v any) (*CheckoutInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -6674,7 +9484,7 @@ func (ec *executionContext) unmarshalOCheckoutInput2ᚖgithubᚗcomᚋrasadovᚋ
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalOCheckoutProductInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx context.Context, v any) (*CheckoutProductInput, error) {
+func (ec *executionContext) unmarshalOCheckoutProductInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCheckoutProductInput(ctx context.Context, v any) (*CheckoutProductInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -6682,7 +9492,7 @@ func (ec *executionContext) unmarshalOCheckoutProductInput2ᚖgithubᚗcomᚋras
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalOCustomerPortalSessionInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐCustomerPortalSessionInput(ctx context.Context, v any) (*CustomerPortalSessionInput, error) {
+func (ec *executionContext) unmarshalOCustomerPortalSessionInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐCustomerPortalSessionInput(ctx context.Context, v any) (*CustomerPortalSessionInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -6706,14 +9516,21 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	return res
 }
 
-func (ec *executionContext) marshalOOrder2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrder(ctx context.Context, sel ast.SelectionSet, v *Order) graphql.Marshaler {
+func (ec *executionContext) marshalOInventoryAvailability2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐInventoryAvailability(ctx context.Context, sel ast.SelectionSet, v *InventoryAvailability) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InventoryAvailability(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOOrder2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrder(ctx context.Context, sel ast.SelectionSet, v *Order) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Order(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOOrderedProductInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx context.Context, v any) (*OrderedProductInput, error) {
+func (ec *executionContext) unmarshalOOrderedProductInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐOrderedProductInput(ctx context.Context, v any) (*OrderedProductInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -6721,7 +9538,7 @@ func (ec *executionContext) unmarshalOOrderedProductInput2ᚖgithubᚗcomᚋrasa
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalOPaginationInput2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐPaginationInput(ctx context.Context, v any) (*PaginationInput, error) {
+func (ec *executionContext) unmarshalOPaginationInput2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐPaginationInput(ctx context.Context, v any) (*PaginationInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -6729,14 +9546,14 @@ func (ec *executionContext) unmarshalOPaginationInput2ᚖgithubᚗcomᚋrasadov�
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalOProduct2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐProduct(ctx context.Context, sel ast.SelectionSet, v *Product) graphql.Marshaler {
+func (ec *executionContext) marshalOProduct2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐProduct(ctx context.Context, sel ast.SelectionSet, v *Product) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Product(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalORedirectResponse2ᚖgithubᚗcomᚋrasadovᚋEcommerceAPIᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx context.Context, sel ast.SelectionSet, v *RedirectResponse) graphql.Marshaler {
+func (ec *executionContext) marshalORedirectResponse2ᚖgithubᚗcomᚋTuananh165artᚋGoshopXᚋgraphqlᚋgeneratedᚐRedirectResponse(ctx context.Context, sel ast.SelectionSet, v *RedirectResponse) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -6786,6 +9603,22 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 		return graphql.Null
 	}
 	res := graphql.MarshalString(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOTime2ᚖtimeᚐTime(ctx context.Context, v any) (*time.Time, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalTime(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTime2ᚖtimeᚐTime(ctx context.Context, sel ast.SelectionSet, v *time.Time) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalTime(*v)
 	return res
 }
 

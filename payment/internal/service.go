@@ -1,13 +1,19 @@
-package internal
+﻿package internal
 
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
+	"strings"
 
+	"github.com/IBM/sarama"
+	"github.com/Tuananh165art/GoshopX/payment/config"
+	"github.com/Tuananh165art/GoshopX/payment/models"
+	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
+	sharedevents "github.com/Tuananh165art/GoshopX/pkg/events"
+	"github.com/Tuananh165art/GoshopX/pkg/kafka"
 	"github.com/dodopayments/dodopayments-go"
-	"github.com/rasadov/EcommerceAPI/payment/models"
-	"github.com/rasadov/EcommerceAPI/payment/proto/pb"
 	"gorm.io/gorm"
 )
 
@@ -28,19 +34,21 @@ type Service interface {
 		userId uint64,
 		customerId string,
 		redirect string,
-		products []*pb.CartItem, orderId uint64,
+		products []*pb.CheckoutCartItem, orderId uint64, reservationIDs []string,
 	) (checkoutURL string, err error)
 
 	HandlePaymentWebhook(ctx context.Context, w http.ResponseWriter, r *http.Request) (*models.Transaction, error)
+	GetProducer() sarama.AsyncProducer
 }
 
 type paymentService struct {
 	client            PaymentClient
 	paymentRepository Repository
+	producer          sarama.AsyncProducer
 }
 
-func NewPaymentService(client PaymentClient, paymentRepository Repository) Service {
-	return &paymentService{client: client, paymentRepository: paymentRepository}
+func NewPaymentService(client PaymentClient, paymentRepository Repository, producer sarama.AsyncProducer) Service {
+	return &paymentService{client: client, paymentRepository: paymentRepository, producer: producer}
 }
 
 // RegisterProduct - registers product with Dodopayments and returns productId and error.
@@ -103,7 +111,7 @@ func (d *paymentService) CreateCheckoutSession(ctx context.Context,
 	userId uint64,
 	customerId string,
 	redirect string,
-	products []*pb.CartItem, orderId uint64) (checkoutURL string, err error) {
+	products []*pb.CheckoutCartItem, orderId uint64, reservationIDs []string) (checkoutURL string, err error) {
 
 	productIds := make([]string, len(products))
 	productQuantities := make(map[string]uint64, len(products))
@@ -127,7 +135,7 @@ func (d *paymentService) CreateCheckoutSession(ctx context.Context,
 		})
 	}
 
-	return d.client.CreateCheckoutSession(ctx, userId, customerId, redirect, dodoProducts, orderId)
+	return d.client.CreateCheckoutSession(ctx, userId, customerId, redirect, dodoProducts, orderId, reservationIDs)
 }
 
 func (d *paymentService) CreateCustomerPortalSession(ctx context.Context, customer *models.Customer) (string, error) {
@@ -171,5 +179,22 @@ func (d *paymentService) HandlePaymentWebhook(ctx context.Context, w http.Respon
 		return nil, err
 	}
 
+	go func() {
+		err := kafka.SendMessage(d, sharedevents.New("payment."+strings.ToLower(updatedTransaction.Status), updatedTransaction.UserId, updatedTransaction.PaymentId, map[string]any{
+			"order_id":        updatedTransaction.OrderId,
+			"payment_id":      updatedTransaction.PaymentId,
+			"status":          updatedTransaction.Status,
+			"reservation_ids": updatedTransaction.ReservationIDs,
+		}), config.PaymentEventsTopic)
+		if err != nil {
+			log.Println("Failed to publish payment event:", err)
+		}
+	}()
+
 	return updatedTransaction, nil
 }
+
+func (d *paymentService) GetProducer() sarama.AsyncProducer {
+	return d.producer
+}
+

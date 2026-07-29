@@ -1,10 +1,10 @@
-package internal
+﻿package internal
 
 import (
 	"context"
 	"log"
 
-	"github.com/rasadov/EcommerceAPI/order/models"
+	"github.com/Tuananh165art/GoshopX/order/models"
 	"gorm.io/gorm"
 )
 
@@ -98,3 +98,4 @@ func (repository *postgresRepository) UpdateOrderPaymentStatus(ctx context.Conte
 		Where("id = ?", orderId).
 		Update("payment_status", status).Error
 }
+

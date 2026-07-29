@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/rasadov/EcommerceAPI/order/models"
-	"github.com/rasadov/EcommerceAPI/pkg/kafka"
+	"github.com/Tuananh165art/GoshopX/order/config"
+	"github.com/Tuananh165art/GoshopX/order/models"
+	sharedevents "github.com/Tuananh165art/GoshopX/pkg/events"
+	"github.com/Tuananh165art/GoshopX/pkg/kafka"
 )
 
 type Service interface {
@@ -62,6 +64,18 @@ func (service orderService) PostOrder(ctx context.Context, accountID uint64, tot
 		}
 	}()
 
+	go func() {
+		err = kafka.SendMessage(service, sharedevents.New("order.created", accountID, "order-created", map[string]any{
+			"order_id":    order.ID,
+			"account_id":  order.AccountID,
+			"total_price": order.TotalPrice,
+			"product_ids": productIDs(products),
+		}), config.OrderEventsTopic)
+		if err != nil {
+			log.Println("Failed to send order event:", err)
+		}
+	}()
+
 	return &order, nil
 }
 
@@ -70,5 +84,26 @@ func (service orderService) GetOrdersForAccount(ctx context.Context, accountID u
 }
 
 func (service orderService) UpdateOrderPaymentStatus(ctx context.Context, orderId uint64, paymnetStatus string) error {
-	return service.repository.UpdateOrderPaymentStatus(ctx, orderId, paymnetStatus)
+	if err := service.repository.UpdateOrderPaymentStatus(ctx, orderId, paymnetStatus); err != nil {
+		return err
+	}
+	go func() {
+		err := kafka.SendMessage(service, sharedevents.New("order.payment_status_updated", 0, "order-status-updated", map[string]any{
+			"order_id": orderId,
+			"status":   paymnetStatus,
+		}), config.OrderEventsTopic)
+		if err != nil {
+			log.Println("Failed to send order status event:", err)
+		}
+	}()
+	return nil
 }
+
+func productIDs(products []*models.OrderedProduct) []string {
+	ids := make([]string, 0, len(products))
+	for _, product := range products {
+		ids = append(ids, product.ID)
+	}
+	return ids
+}
+

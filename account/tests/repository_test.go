@@ -1,4 +1,4 @@
-package tests
+﻿package tests
 
 import (
 	"context"
@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rasadov/EcommerceAPI/account/internal"
+	"github.com/Tuananh165art/GoshopX/account/internal"
 
-	"github.com/rasadov/EcommerceAPI/account/models"
+	"github.com/Tuananh165art/GoshopX/account/models"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -341,3 +341,4 @@ func TestWithTimeout(t *testing.T) {
 		t.Logf("Operation timed out as expected: %v", err)
 	}
 }
+

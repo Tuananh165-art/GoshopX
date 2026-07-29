@@ -1,10 +1,10 @@
-package internal
+﻿package internal
 
 import (
 	"context"
 	"log"
 
-	"github.com/rasadov/EcommerceAPI/payment/models"
+	"github.com/Tuananh165art/GoshopX/payment/models"
 	"gorm.io/gorm"
 )
 
@@ -128,3 +128,4 @@ func (repository *postgresRepository) RegisterTransaction(ctx context.Context, t
 func (repository *postgresRepository) UpdateTransaction(ctx context.Context, transaction *models.Transaction) error {
 	return repository.db.WithContext(ctx).Save(&transaction).Error
 }
+

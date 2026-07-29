@@ -1,4 +1,4 @@
-package tests
+﻿package tests
 
 import (
 	"context"
@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Tuananh165art/GoshopX/payment/internal"
+	"github.com/Tuananh165art/GoshopX/payment/models"
+	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
 	"github.com/dodopayments/dodopayments-go"
-	"github.com/rasadov/EcommerceAPI/payment/internal"
-	"github.com/rasadov/EcommerceAPI/payment/models"
-	"github.com/rasadov/EcommerceAPI/payment/proto/pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
@@ -116,8 +116,8 @@ func (m *MockPaymentClient) CreateCustomerSession(ctx context.Context, customerI
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockPaymentClient) CreateCheckoutSession(ctx context.Context, userId uint64, customerId string, redirect string, dodoProducts []dodopayments.CheckoutSessionRequestProductCartParam, orderId uint64) (string, error) {
-	args := m.Called(ctx, userId, customerId, redirect, dodoProducts, orderId)
+func (m *MockPaymentClient) CreateCheckoutSession(ctx context.Context, userId uint64, customerId string, redirect string, dodoProducts []dodopayments.CheckoutSessionRequestProductCartParam, orderId uint64, reservationIDs []string) (string, error) {
+	args := m.Called(ctx, userId, customerId, redirect, dodoProducts, orderId, reservationIDs)
 	return args.String(0), args.Error(1)
 }
 
@@ -133,7 +133,7 @@ func TestPaymentService_RegisterProduct(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := new(MockRepository)
 	mockClient := new(MockPaymentClient)
-	service := internal.NewPaymentService(mockClient, mockRepo)
+	service := internal.NewPaymentService(mockClient, mockRepo, nil)
 
 	t.Run("Successful product registration", func(t *testing.T) {
 		dodoProduct := &dodopayments.Product{
@@ -170,7 +170,7 @@ func TestPaymentService_UpdateProduct(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := new(MockRepository)
 	mockClient := new(MockPaymentClient)
-	service := internal.NewPaymentService(mockClient, mockRepo)
+	service := internal.NewPaymentService(mockClient, mockRepo, nil)
 
 	t.Run("Successful product update", func(t *testing.T) {
 		product := &models.Product{ProductID: "product-1", Price: 999}
@@ -201,7 +201,7 @@ func TestPaymentService_DeleteProduct(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := new(MockRepository)
 	mockClient := new(MockPaymentClient)
-	service := internal.NewPaymentService(mockClient, mockRepo)
+	service := internal.NewPaymentService(mockClient, mockRepo, nil)
 
 	t.Run("Successful product deletion", func(t *testing.T) {
 		mockClient.On("ArchiveProduct", ctx, "product-1").Return(nil).Once()
@@ -219,7 +219,7 @@ func TestPaymentService_FindOrCreateCustomer(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := new(MockRepository)
 	mockClient := new(MockPaymentClient)
-	service := internal.NewPaymentService(mockClient, mockRepo)
+	service := internal.NewPaymentService(mockClient, mockRepo, nil)
 
 	t.Run("Returns existing customer", func(t *testing.T) {
 		customer := &models.Customer{UserId: 1, CustomerId: "cust-1"}
@@ -253,17 +253,17 @@ func TestPaymentService_CreateCheckoutSession(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := new(MockRepository)
 	mockClient := new(MockPaymentClient)
-	service := internal.NewPaymentService(mockClient, mockRepo)
+	service := internal.NewPaymentService(mockClient, mockRepo, nil)
 
 	t.Run("Successful checkout session", func(t *testing.T) {
-		cart := []*pb.CartItem{{ProductId: "product-1", Quantity: 2}}
+		cart := []*pb.CheckoutCartItem{{ProductId: "product-1", Quantity: 2}}
 		products := []*models.Product{{ProductID: "product-1", DodoProductID: "dodo-1"}}
 
 		mockRepo.On("GetProductsByIDs", ctx, []string{"product-1"}).Return(products, nil).Once()
-		mockClient.On("CreateCheckoutSession", ctx, uint64(1), "cust-1", "http://localhost/redirect", mock.Anything, uint64(10)).
+		mockClient.On("CreateCheckoutSession", ctx, uint64(1), "cust-1", "http://localhost/redirect", mock.Anything, uint64(10), []string(nil)).
 			Return("https://checkout.example.com", nil).Once()
 
-		url, err := service.CreateCheckoutSession(ctx, 1, "cust-1", "http://localhost/redirect", cart, 10)
+		url, err := service.CreateCheckoutSession(ctx, 1, "cust-1", "http://localhost/redirect", cart, 10, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, "https://checkout.example.com", url)
@@ -276,7 +276,7 @@ func TestPaymentService_CreateCustomerPortalSession(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := new(MockRepository)
 	mockClient := new(MockPaymentClient)
-	service := internal.NewPaymentService(mockClient, mockRepo)
+	service := internal.NewPaymentService(mockClient, mockRepo, nil)
 
 	t.Run("Successful portal session", func(t *testing.T) {
 		customer := &models.Customer{CustomerId: "cust-1"}
@@ -295,7 +295,7 @@ func TestPaymentService_HandlePaymentWebhook(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := new(MockRepository)
 	mockClient := new(MockPaymentClient)
-	service := internal.NewPaymentService(mockClient, mockRepo)
+	service := internal.NewPaymentService(mockClient, mockRepo, nil)
 
 	t.Run("Successful webhook handling", func(t *testing.T) {
 		transaction := &models.Transaction{PaymentId: "pay-1", Status: models.Success.String()}
@@ -313,3 +313,4 @@ func TestPaymentService_HandlePaymentWebhook(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
+

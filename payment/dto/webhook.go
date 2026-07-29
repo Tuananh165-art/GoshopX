@@ -3,8 +3,9 @@ package dto
 import "github.com/dodopayments/dodopayments-go"
 
 type WebhookMetadata struct {
-	OrderId uint64 `json:"order_id"`
-	UserId  uint64 `json:"user_id"`
+	OrderId        uint64 `json:"order_id"`
+	UserId         uint64 `json:"user_id"`
+	ReservationIDs string `json:"reservation_ids"`
 }
 
 type WebhookPayload struct {

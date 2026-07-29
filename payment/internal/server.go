@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -6,17 +6,20 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/IBM/sarama"
-	order "github.com/rasadov/EcommerceAPI/order/client"
-	"github.com/rasadov/EcommerceAPI/payment/proto/pb"
+	cart "github.com/Tuananh165art/GoshopX/cart/client"
+	inventory "github.com/Tuananh165art/GoshopX/inventory/client"
+	order "github.com/Tuananh165art/GoshopX/order/client"
+	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 // StartServers runs both gRPC and HTTP webhook servers concurrently
-func StartServers(service Service, consumer sarama.Consumer, orderURL string, grpcPort, webhookPort int) error {
+func StartServers(service Service, consumer sarama.Consumer, orderURL, inventoryURL, cartURL string, grpcPort, webhookPort int) error {
 	var wg sync.WaitGroup
 	errCh := make(chan error, 3)
 
@@ -46,7 +49,7 @@ func StartServers(service Service, consumer sarama.Consumer, orderURL string, gr
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := listenWebhook(service, orderURL, webhookPort); err != nil {
+		if err := listenWebhook(service, orderURL, inventoryURL, cartURL, webhookPort); err != nil {
 			errCh <- fmt.Errorf("webhook server error: %w", err)
 		}
 	}()
@@ -83,16 +86,28 @@ func ListenGRPC(service Service, orderURL string, port int) error {
 	return serv.Serve(lis)
 }
 
-func listenWebhook(service Service, orderURL string, port int) error {
+func listenWebhook(service Service, orderURL, inventoryURL, cartURL string, port int) error {
 	orderClient, err := order.NewClient(orderURL)
 	if err != nil {
 		return err
 	}
 	defer orderClient.Close()
+	inventoryClient, err := inventory.NewClient(inventoryURL)
+	if err != nil {
+		return err
+	}
+	defer inventoryClient.Close()
+	cartClient, err := cart.NewClient(cartURL)
+	if err != nil {
+		return err
+	}
+	defer cartClient.Close()
 
 	webhookServer := &WebhookServer{
-		service:     service,
-		orderClient: orderClient,
+		service:         service,
+		orderClient:     orderClient,
+		inventoryClient: inventoryClient,
+		cartClient:      cartClient,
 	}
 
 	mux := http.NewServeMux()
@@ -106,3 +121,19 @@ func listenWebhook(service Service, orderURL string, port int) error {
 	log.Printf("Webhook server listening on port %d", port)
 	return server.ListenAndServe()
 }
+
+func reservationIDs(csv string) []string {
+	if strings.TrimSpace(csv) == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
+}
+

@@ -1,14 +1,14 @@
-package main
+﻿package main
 
 import (
 	"log"
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/rasadov/EcommerceAPI/product/config"
+	"github.com/Tuananh165art/GoshopX/product/config"
 	"github.com/tinrab/retry"
 
-	"github.com/rasadov/EcommerceAPI/product/internal"
+	"github.com/Tuananh165art/GoshopX/product/internal"
 )
 
 func main() {
@@ -39,3 +39,4 @@ func main() {
 	service := internal.NewProductService(repository, producer)
 	log.Fatal(internal.ListenGRPC(service, 8080))
 }
+

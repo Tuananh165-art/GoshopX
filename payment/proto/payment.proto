@@ -5,7 +5,7 @@ package pb;
 
 option go_package = "./pb";
 
-message CartItem {
+message CheckoutCartItem {
   string productId = 1;
   uint64 quantity = 2;
 }
@@ -15,8 +15,9 @@ message CheckoutRequest {
   string email = 2;
   string name = 3;
   string redirectURL = 4;
-  repeated CartItem products = 5;
+  repeated CheckoutCartItem products = 5;
   uint64 orderId = 6;
+  repeated string reservationIds = 7;
 }
 
 message CustomerPortalRequest {

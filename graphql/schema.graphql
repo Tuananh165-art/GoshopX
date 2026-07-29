@@ -7,12 +7,46 @@ type Account {
     orders: [Order!]!
 }
 
+type InventoryAvailability {
+    productId: String!
+    totalQuantity: Int!
+    reservedQuantity: Int!
+    availableQuantity: Int!
+    reorderLevel: Int!
+    lowStock: Boolean!
+}
+
 type Product {
     id: String!
     name: String!
     description: String!
     price: Float!
     accountId: Int!
+    availability: InventoryAvailability
+}
+
+type CartItem {
+    product: Product!
+    quantity: Int!
+    reservationId: String!
+    reservedUntil: Time!
+}
+
+type Cart {
+    accountId: Int!
+    expiresAt: Time!
+    items: [CartItem!]!
+}
+
+type Notification {
+    id: Int!
+    eventType: String!
+    title: String!
+    message: String!
+    metadataJson: String!
+    isRead: Boolean!
+    createdAt: Time!
+    readAt: Time
 }
 
 type Order {
@@ -96,6 +130,12 @@ input CheckoutInput {
     orderId: Int!
 }
 
+input UpsertProductStockInput {
+    productId: String!
+    quantity: Int!
+    reorderLevel: Int!
+}
+
 type Mutation {
     register(account: RegisterInput!): AuthResponse
     login(account: LoginInput!): AuthResponse
@@ -105,9 +145,20 @@ type Mutation {
     createOrder(order: OrderInput!): Order
     createCustomerPortalSession(credentials: CustomerPortalSessionInput): RedirectResponse
     createCheckoutSession(details: CheckoutInput): RedirectResponse
+    upsertProductStock(input: UpsertProductStockInput!): InventoryAvailability!
+    addCartItem(productId: String!, quantity: Int!): Cart!
+    updateCartItemQuantity(productId: String!, quantity: Int!): Cart!
+    removeCartItem(productId: String!): Cart!
+    clearCart: Boolean!
+    checkoutCart(redirectUrl: String!): RedirectResponse!
+    markNotificationRead(id: Int!): Boolean!
+    markAllNotificationsRead: Int!
 }
 
 type Query{
     accounts(pagination: PaginationInput, id: Int): [Account!]!
     product(pagination: PaginationInput, query: String, id: String, viewedProductsIds: [String], byAccountId: Boolean): [Product!]!
+    myCart: Cart!
+    notifications(pagination: PaginationInput): [Notification!]!
+    unreadNotificationCount: Int!
 }

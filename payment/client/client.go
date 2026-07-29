@@ -1,10 +1,10 @@
-package client
+﻿package client
 
 import (
 	"context"
 	"log"
 
-	"github.com/rasadov/EcommerceAPI/payment/proto/pb"
+	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -44,14 +44,15 @@ func (client *Client) CreateCustomerPortalSession(ctx context.Context, userId ui
 }
 
 func (client *Client) CreateCheckoutSession(ctx context.Context, orderId, userId int,
-	email, name, redirectUrl string, products []*pb.CartItem) (string, error) {
+	email, name, redirectUrl string, products []*pb.CheckoutCartItem, reservationIDs []string) (string, error) {
 	res, err := client.service.CreateCheckoutSession(ctx, &pb.CheckoutRequest{
-		UserId:      uint64(userId),
-		Email:       email,
-		Name:        name,
-		RedirectURL: redirectUrl,
-		Products:    products,
-		OrderId:     uint64(orderId),
+		UserId:         uint64(userId),
+		Email:          email,
+		Name:           name,
+		RedirectURL:    redirectUrl,
+		Products:       products,
+		OrderId:        uint64(orderId),
+		ReservationIds: reservationIDs,
 	})
 	if err != nil {
 		log.Println(err)
@@ -59,3 +60,4 @@ func (client *Client) CreateCheckoutSession(ctx context.Context, orderId, userId
 	}
 	return res.Value, nil
 }
+

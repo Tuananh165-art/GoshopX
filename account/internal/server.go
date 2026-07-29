@@ -1,11 +1,11 @@
-package internal
+﻿package internal
 
 import (
 	"context"
 	"fmt"
 	"net"
 
-	"github.com/rasadov/EcommerceAPI/account/proto/pb"
+	"github.com/Tuananh165art/GoshopX/account/proto/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -76,3 +76,4 @@ func (server *grpcServer) GetAccounts(ctx context.Context, r *pb.GetAccountsRequ
 	}
 	return &pb.GetAccountsResponse{Accounts: accounts}, nil
 }
+

@@ -1,11 +1,11 @@
-package main
+﻿package main
 
 import (
 	"log"
 	"time"
 
-	"github.com/rasadov/EcommerceAPI/account/config"
-	"github.com/rasadov/EcommerceAPI/account/internal"
+	"github.com/Tuananh165art/GoshopX/account/config"
+	"github.com/Tuananh165art/GoshopX/account/internal"
 	"github.com/tinrab/retry"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -30,3 +30,4 @@ func main() {
 	service := internal.NewService(repository)
 	log.Fatal(internal.ListenGRPC(service, 8080))
 }
+

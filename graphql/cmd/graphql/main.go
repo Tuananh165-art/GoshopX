@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"log"
@@ -6,14 +6,23 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/Tuananh165art/GoshopX/graphql/config"
+	"github.com/Tuananh165art/GoshopX/graphql/graph"
+	"github.com/Tuananh165art/GoshopX/pkg/middleware"
 	"github.com/gin-gonic/gin"
-	"github.com/rasadov/EcommerceAPI/graphql/config"
-	"github.com/rasadov/EcommerceAPI/graphql/graph"
-	"github.com/rasadov/EcommerceAPI/pkg/middleware"
 )
 
 func main() {
-	server, err := graph.NewGraphQLServer(config.AccountUrl, config.ProductUrl, config.OrderUrl, config.PaymentUrl, config.RecommenderUrl)
+	server, err := graph.NewGraphQLServer(
+		config.AccountUrl,
+		config.ProductUrl,
+		config.OrderUrl,
+		config.PaymentUrl,
+		config.RecommenderUrl,
+		config.InventoryUrl,
+		config.CartUrl,
+		config.NotificationUrl,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,3 +48,4 @@ func main() {
 
 	log.Fatal(engine.Run(":8080"))
 }
+

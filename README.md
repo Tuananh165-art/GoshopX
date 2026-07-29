@@ -1,228 +1,94 @@
-# ECOMMERCE MICROSERVICES
+# GoshopX
 
-This repository hosts a sample **e-commerce platform** demonstrating a **microservices architecture** using multiple **Go services** alongside a **Python-based Recommender service**. The project showcases:
+GoshopX is a GraphQL-first e-commerce microservices stack built with Go and Python. Public client traffic goes through GraphQL, internal synchronous calls use gRPC, asynchronous business facts move through Kafka, product search stays in Elasticsearch, and active cart state now uses Redis.
 
-- gRPC communication between services
-- Kafka-based event streaming pipeline
-- A unified GraphQL API gateway for clients
-- Elasticsearch integration for product search
+## Services
 
----
+- `account`: account registration, login, JWT issuance
+- `product`: product CRUD and Elasticsearch-backed catalog/search
+- `order`: order creation and order event publishing
+- `payment`: payment workflow, webhook handling, payment event publishing
+- `inventory`: stock ownership, reservations, low-stock signals
+- `cart`: Redis-backed active cart with reservation coordination
+- `notification`: in-app notification feed backed by PostgreSQL
+- `graphql`: public GraphQL API gateway
+- `recommender`: Python recommendation services and consumers
 
-## 📚 Table of Contents
+## Runtime Stack
 
-- [Overview](#-overview)
-- [Architecture Diagram](#-architecture-diagram)
-- [Services](#-services)
-- [Getting Started](#-getting-started)
-- [Usage](#-usage-graphql)
-- [Contributing](#-contributing)
-- [Author](#-author)
-- [License](#-license)
+- PostgreSQL: `account_db`, `order_db`, `payment_db`, `inventory_db`, `notification_db`, `recommender_db`
+- Kafka: `kafka`
+- Elasticsearch: `product_db`
+- Redis: `redis`
 
----
+Core commerce topics:
 
-## 🧭 Overview
+- `product_events`
+- `interaction_events`
+- `order_events`
+- `payment_events`
+- `inventory_events`
+- `cart_events`
 
-The system comprises several microservices:
+## Configuration
 
-- **Account** (Go): Manages user accounts, authentication, and authorization.
-- **Product** (Go): CRUD for products; indexes product data in **Elasticsearch**.
-- **Order** (Go): Handles order creation and persistence; publishes events to Kafka.
-- **Payment** (Go): Handles payment operations and sends updates to order microservice
-- **Recommender** (Python): Consumes Kafka events and builds product recommendations.
-- **API Gateway** (Go): A GraphQL service exposing a unified API for front-end clients.
+Runtime defaults now live in:
 
-The entire ecosystem is containerized using **Docker Compose**. Datastores include **PostgreSQL**, **Elasticsearch**, and **Kafka**.
+- `.env`: local developer values
+- `.env.example`: shareable template
 
----
+Key groups:
 
-## 🏗 Architecture Diagram
+- Database URLs: account, order, payment, inventory, notification, recommender
+- Internal service URLs: account, product, order, payment, recommender, inventory, cart, notification
+- Infra: Kafka, Redis
+- Auth: `SECRET_KEY`, `ISSUER`
+- Payments: `DODO_API_KEY`, `DODO_WEBHOOK_SECRET`, `DODO_CHECKOUT_URL`, `DODO_TEST_MODE`
 
-Below is a high-level overview of the system architecture:
+`docker-compose.yaml` reads these values with local-safe defaults, so you can override only what you need.
 
-![API Design](./design.png)
+## Getting Started
 
-### Communication Overview
-
-- `API Gateway (GraphQL)` talks to:
-    - `Account client` → `Account server` → `Postgres`
-    - `Product client` → `Product server` → `ElasticSearch` + Kafka
-    - `Order client` → `Order server` → `Postgres` + Kafka
-      (also communicates with Product service via gRPC)
-    - `Payment client` → `Payment service` → `payment provider` + `Postgres` + Kafka
-    - `Recommender client` → `Recommender server` (Python) → `Postgres (Replica)` + Kafka
-
-- **Event Flow**:
-    - `Order` and `Product` services act as **Kafka producers**.
-    - `Payment` service is a **Kafka consumer**, ingesting product events and saving them in payment provider (DodoPayments).
-    - `Recommender` service is also a **Kafka consumer**, ingesting order/product events and updating internal state for recommendations.
-
----
-
-## ⚙ Services
-
-### 🧑‍💼 Account Service (Go)
-- Responsibilities: Register, login, fetch account data, generate JWT tokens.
-- Database: PostgreSQL
-
-### 📦 Product Service (Go)
-- Responsibilities: Product CRUD operations, indexing to Elasticsearch, event publishing to Kafka.
-- Database: Elasticsearch
-
-### 🛒 Order Service (Go)
-- Responsibilities: Order creation, price calculation, data persistence, Kafka event publishing.
-- Dependencies: Calls product service to retrieve product info.
-
-### 🧠 Recommender Service (Python)
-- Responsibilities: Kafka consumer that builds recommendations based on product/order events.
-- Tech Stack: Python + gRPC + PostgreSQL (replica of product DB)
-
-### 🚪 API Gateway (Go)
-- Responsibilities: Unified GraphQL endpoint at `/graphql`.
-- Implementation: Uses gRPC clients for all microservices and schema stitching.
-
----
-## 🚀 Getting Started
-
-### ✅ Prerequisites
-
-Before running the project, ensure you have the following installed:
-
-- [Docker](https://www.docker.com/get-started) & [Docker Compose](https://docs.docker.com/compose/)
-- [Git](https://git-scm.com/)
-
----
-
-### 📥 Clone the Repository
+1. Review `.env.example` and update `.env` for your machine.
+2. Validate Compose:
 
 ```bash
-git clone https://github.com/Tuananh165-art/GoshopX.git
-cd GoshopX
+docker compose config --quiet
 ```
 
----
-
-### 🐳 Run the Stack
-
-To build and start all services using Docker Compose, run:
+3. Build and start the stack:
 
 ```bash
-# Step 1: Build the base image
-docker compose build base
-
-# Step 2: Build and start all services
-docker compose up -d --build```
+docker compose up --build -d
 ```
 
-This will start:
+4. Open GraphQL:
 
-- Go microservices (`account`, `order`, `product`, `payment`, `graphql`)
-- Python-based `recommender` service
-- Databases: PostgreSQL, Elasticsearch
-- Kafka + Zookeeper
-- GraphQL gateway
+- Playground: `http://localhost:8080/playground`
+- GraphQL endpoint: `http://localhost:8080/graphql`
+- Health: `http://localhost:8080/health`
 
----
+## Verification
 
-### 🌐 Access the API
+Suggested checks:
 
-Once everything is running, open your browser to:
-
-- **GraphQL API endpoint**:  
-  [http://localhost:8080/graphql](http://localhost:8080/graphql)
-
-- **GraphQL Playground (interactive testing)**:  
-  [http://localhost:8080/playground](http://localhost:8080/playground)
-
----
-
-## 📬 Usage (GraphQL)
-
-Below are example GraphQL queries and mutations you can test in the [GraphQL Playground](http://localhost:8080/playground).
-
----
-
-### 📝 Register a New Account
-
-```graphql
-mutation {
-  register(account: {
-    name: "Alice"
-    email: "alice@example.com"
-    password: "secret123"
-  }) {
-    token
-  }
-}
+```bash
+go test -race -count=1 ./account/... ./product/... ./order/... ./payment/... ./graphql/... ./pkg/... ./inventory/... ./cart/... ./notification/...
+go test ./tests/e2e
+docker compose config --quiet
+docker compose up --build -d
 ```
 
----
+## Local Runtime Notes
 
-### 🔐 Login
+- If Postgres credentials change after a previous run, old Docker volumes can keep stale users/passwords.
+- For this repo, the most common local reset targets are:
+  - `goshopx_account_db_data`
+  - `goshopx_order_db_data`
+  - `goshopx_payment_db_data`
+- Redis is required for `cart`.
+- `inventory`, `cart`, and `notification` are required for the new core commerce flow.
 
-```graphql
-mutation {
-  login(account: {
-    email: "alice@example.com"
-    password: "secret123"
-  }) {
-    token
-  }
-}
-```
+## Documentation
 
----
-
-### ➕ Create a Product
-
-```graphql
-mutation {
-  createProduct(product: {
-    name: "Camera"
-    description: "A digital camera"
-    price: 99.99
-  }) {
-    id
-    name
-  }
-}
-```
-
----
-
-### 🔍 Query Products
-
-```graphql
-query {
-  product(pagination: { skip: 0, take: 10 }) {
-    id
-    name
-    price
-  }
-}
-```
-
----
-
-### 🛒 Create an Order
-
-```graphql
-mutation {
-  createOrder(order: {
-    products: [
-      { id: "PRODUCT_ID", quantity: 2 }
-    ]
-  }) {
-    id
-    totalPrice
-    products {
-      name
-      quantity
-    }
-  }
-}
-```
-
-## 🪪 License
-This project is licensed under the Apache License 2.0.
+Start with [docs/00-index.md](./docs/00-index.md). The docs set includes BMAD process, Scrum delivery, architecture decisions, core-commerce specs, and runtime configuration notes.

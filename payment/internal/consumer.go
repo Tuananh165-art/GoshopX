@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"log"
 
 	"github.com/IBM/sarama"
-	"github.com/rasadov/EcommerceAPI/payment/models"
-	"github.com/rasadov/EcommerceAPI/pkg/kafka"
+	"github.com/Tuananh165art/GoshopX/payment/models"
+	"github.com/Tuananh165art/GoshopX/pkg/kafka"
 )
 
 type EventConsumer struct {
@@ -107,3 +107,4 @@ func (ec *EventConsumer) handleProductDeleted(event models.ProductEvent) {
 		log.Printf("Failed to delete product with payment provider: %v", err)
 	}
 }
+

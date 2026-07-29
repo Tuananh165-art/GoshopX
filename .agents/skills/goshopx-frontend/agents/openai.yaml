@@ -1,0 +1,4 @@
+interface:
+  display_name: "GoshopX Frontend"
+  short_description: "Build client UI through GraphQL contract"
+  default_prompt: "Use this role skill to design, implement, review, or test GoshopX frontend flows through GraphQL."

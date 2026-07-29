@@ -1,8 +1,31 @@
-schema: ../schema.graphql
+schema:
+  - graphql/schema.graphql
+
+exec:
+  filename: graphql/generated/generated.go
+  package: generated
+
+model:
+  filename: graphql/generated/models_gen.go
+  package: generated
+
+resolver:
+  type: Server
+  layout: follow-schema
+  dir: graphql/graph
+  package: graph
 
 models:
+  Time:
+    model:
+      - github.com/99designs/gqlgen/graphql.Time
   Account:
-    model: github.com/rasadov/EcommerceAPI/graphql/models.Account
     fields:
       orders:
         resolver: true
+  Product:
+    fields:
+      availability:
+        resolver: true
+
+skip_validation: true

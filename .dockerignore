@@ -1,0 +1,15 @@
+.git
+.github
+.agents
+.gocache
+.gomodcache
+.tmp
+.idea
+.venv
+__pycache__
+*.log
+.env
+docs
+tests
+**/tests
+design.png

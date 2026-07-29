@@ -1,11 +1,11 @@
-package middleware
+﻿package middleware
 
 import (
 	"context"
 
+	"github.com/Tuananh165art/GoshopX/pkg/auth"
+	"github.com/Tuananh165art/GoshopX/pkg/contextkeys"
 	"github.com/gin-gonic/gin"
-	"github.com/rasadov/EcommerceAPI/pkg/auth"
-	"github.com/rasadov/EcommerceAPI/pkg/contextkeys"
 )
 
 func AuthorizeJWT() gin.HandlerFunc {
@@ -36,3 +36,4 @@ func AuthorizeJWT() gin.HandlerFunc {
 		c.Next()
 	}
 }
+

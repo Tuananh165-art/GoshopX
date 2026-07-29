@@ -1,0 +1,4 @@
+interface:
+  display_name: "GoshopX PM"
+  short_description: "Shape backlog and sprint delivery"
+  default_prompt: "Use this role skill to turn GoshopX goals into prioritized stories, sprint scope, and release notes."

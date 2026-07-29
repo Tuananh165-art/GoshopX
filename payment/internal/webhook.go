@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -6,12 +6,17 @@ import (
 	"net/http"
 	"time"
 
-	order "github.com/rasadov/EcommerceAPI/order/client"
+	cart "github.com/Tuananh165art/GoshopX/cart/client"
+	inventory "github.com/Tuananh165art/GoshopX/inventory/client"
+	order "github.com/Tuananh165art/GoshopX/order/client"
+	"github.com/Tuananh165art/GoshopX/payment/models"
 )
 
 type WebhookServer struct {
-	service     Service
-	orderClient *order.Client
+	service         Service
+	orderClient     *order.Client
+	inventoryClient *inventory.Client
+	cartClient      *cart.Client
 }
 
 func (s *WebhookServer) HandlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
@@ -27,4 +32,22 @@ func (s *WebhookServer) HandlePaymentWebhook(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Println(err.Error())
 	}
+
+	for _, reservationID := range reservationIDs(transaction.ReservationIDs) {
+		switch transaction.Status {
+		case models.Success.String():
+			if _, _, err := s.inventoryClient.CommitReservation(ctx, reservationID); err != nil {
+				log.Println(err.Error())
+			}
+		default:
+			if _, _, err := s.inventoryClient.ReleaseReservation(ctx, reservationID); err != nil {
+				log.Println(err.Error())
+			}
+		}
+	}
+
+	if err := s.cartClient.ClearCart(ctx, transaction.UserId); err != nil {
+		log.Println(err.Error())
+	}
 }
+

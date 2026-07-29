@@ -1,11 +1,11 @@
-package client
+﻿package client
 
 import (
 	"context"
 	"log"
 
-	"github.com/rasadov/EcommerceAPI/product/models"
-	"github.com/rasadov/EcommerceAPI/product/proto/pb"
+	"github.com/Tuananh165art/GoshopX/product/models"
+	"github.com/Tuananh165art/GoshopX/product/proto/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -115,3 +115,4 @@ func (client *Client) DeleteProduct(ctx context.Context, productId string, accou
 	_, err := client.service.DeleteProduct(ctx, &pb.DeleteProductRequest{ProductId: productId, AccountId: accountId})
 	return err
 }
+

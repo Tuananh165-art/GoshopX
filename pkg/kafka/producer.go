@@ -13,7 +13,7 @@ type ProducerService interface {
 	GetProducer() sarama.AsyncProducer
 }
 
-func SendMessageToRecommender(service ProducerService, event any, topic string) error {
+func SendMessage(service ProducerService, event any, topic string) error {
 	producer := service.GetProducer()
 	if producer == nil {
 		log.Println("Kafka producer not configured, skipping message")
@@ -31,10 +31,12 @@ func SendMessageToRecommender(service ProducerService, event any, topic string) 
 		Value: sarama.StringEncoder(jsonMessage),
 	}
 
-	// Send the message asynchronously
 	producer.Input() <- msg
-
 	return nil
+}
+
+func SendMessageToRecommender(service ProducerService, event any, topic string) error {
+	return SendMessage(service, event, topic)
 }
 
 func CloseProducer(service ProducerService) {

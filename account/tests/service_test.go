@@ -1,14 +1,14 @@
-package tests
+﻿package tests
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/rasadov/EcommerceAPI/account/internal"
-	"github.com/rasadov/EcommerceAPI/account/models"
-	"github.com/rasadov/EcommerceAPI/pkg/auth"
-	"github.com/rasadov/EcommerceAPI/pkg/crypt"
+	"github.com/Tuananh165art/GoshopX/account/internal"
+	"github.com/Tuananh165art/GoshopX/account/models"
+	"github.com/Tuananh165art/GoshopX/pkg/auth"
+	"github.com/Tuananh165art/GoshopX/pkg/crypt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -225,3 +225,4 @@ func TestAccountService_GetAccounts(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
+

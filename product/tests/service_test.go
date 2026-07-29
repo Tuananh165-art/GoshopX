@@ -1,4 +1,4 @@
-package tests
+﻿package tests
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/rasadov/EcommerceAPI/product/internal"
-	"github.com/rasadov/EcommerceAPI/product/models"
+	"github.com/Tuananh165art/GoshopX/product/internal"
+	"github.com/Tuananh165art/GoshopX/product/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -302,3 +302,4 @@ func TestProductService_DeleteProduct(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
+

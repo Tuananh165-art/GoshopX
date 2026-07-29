@@ -1,0 +1,4 @@
+interface:
+  display_name: "GoshopX Backend"
+  short_description: "Implement service logic and contracts"
+  default_prompt: "Use this role skill to change GoshopX services, resolvers, protobufs, Kafka, repositories, and tests."

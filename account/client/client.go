@@ -1,11 +1,11 @@
-package client
+﻿package client
 
 import (
 	"context"
 	"log"
 
-	"github.com/rasadov/EcommerceAPI/account/models"
-	"github.com/rasadov/EcommerceAPI/account/proto/pb"
+	"github.com/Tuananh165art/GoshopX/account/models"
+	"github.com/Tuananh165art/GoshopX/account/proto/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -90,3 +90,4 @@ func (client *Client) GetAccounts(ctx context.Context, skip, take uint64) ([]mod
 	}
 	return accounts, nil
 }
+

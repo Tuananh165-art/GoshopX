@@ -6,8 +6,28 @@ import (
 	"time"
 )
 
+type Account struct {
+	ID     int      `json:"id"`
+	Name   string   `json:"name"`
+	Email  string   `json:"email"`
+	Orders []*Order `json:"orders"`
+}
+
 type AuthResponse struct {
 	Token string `json:"token"`
+}
+
+type Cart struct {
+	AccountID int         `json:"accountId"`
+	ExpiresAt time.Time   `json:"expiresAt"`
+	Items     []*CartItem `json:"items"`
+}
+
+type CartItem struct {
+	Product       *Product  `json:"product"`
+	Quantity      int       `json:"quantity"`
+	ReservationID string    `json:"reservationId"`
+	ReservedUntil time.Time `json:"reservedUntil"`
 }
 
 type CheckoutInput struct {
@@ -36,12 +56,32 @@ type CustomerPortalSessionInput struct {
 	Name      string `json:"name"`
 }
 
+type InventoryAvailability struct {
+	ProductID         string `json:"productId"`
+	TotalQuantity     int    `json:"totalQuantity"`
+	ReservedQuantity  int    `json:"reservedQuantity"`
+	AvailableQuantity int    `json:"availableQuantity"`
+	ReorderLevel      int    `json:"reorderLevel"`
+	LowStock          bool   `json:"lowStock"`
+}
+
 type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
 type Mutation struct {
+}
+
+type Notification struct {
+	ID           int        `json:"id"`
+	EventType    string     `json:"eventType"`
+	Title        string     `json:"title"`
+	Message      string     `json:"message"`
+	MetadataJSON string     `json:"metadataJson"`
+	IsRead       bool       `json:"isRead"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	ReadAt       *time.Time `json:"readAt,omitempty"`
 }
 
 type Order struct {
@@ -74,11 +114,12 @@ type PaginationInput struct {
 }
 
 type Product struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	AccountID   int     `json:"accountId"`
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description"`
+	Price        float64                `json:"price"`
+	AccountID    int                    `json:"accountId"`
+	Availability *InventoryAvailability `json:"availability,omitempty"`
 }
 
 type Query struct {
@@ -99,4 +140,10 @@ type UpdateProductInput struct {
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
 	Price       float64 `json:"price"`
+}
+
+type UpsertProductStockInput struct {
+	ProductID    string `json:"productId"`
+	Quantity     int    `json:"quantity"`
+	ReorderLevel int    `json:"reorderLevel"`
 }

@@ -1,6 +1,6 @@
-package utils
+﻿package utils
 
-import "github.com/rasadov/EcommerceAPI/graphql/generated"
+import "github.com/Tuananh165art/GoshopX/graphql/generated"
 
 func Bounds(pagination *generated.PaginationInput) (uint64, uint64) {
 	skipValue := uint64(0)
@@ -13,3 +13,4 @@ func Bounds(pagination *generated.PaginationInput) (uint64, uint64) {
 	}
 	return skipValue, takeValue
 }
+

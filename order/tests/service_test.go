@@ -1,4 +1,4 @@
-package tests
+﻿package tests
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/rasadov/EcommerceAPI/order/internal"
-	"github.com/rasadov/EcommerceAPI/order/models"
+	"github.com/Tuananh165art/GoshopX/order/internal"
+	"github.com/Tuananh165art/GoshopX/order/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -187,3 +187,4 @@ func TestOrderService_UpdateOrderPaymentStatus(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
+

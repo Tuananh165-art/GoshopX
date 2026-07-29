@@ -1,8 +1,9 @@
-package client
+﻿package client
 
 import (
 	"context"
-	"github.com/rasadov/EcommerceAPI/recommender/generated/pb"
+
+	"github.com/Tuananh165art/GoshopX/recommender/generated/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -46,3 +47,4 @@ func (client *Client) GetRecommendationBasedOnViewed(ctx context.Context, ids []
 		},
 	)
 }
+

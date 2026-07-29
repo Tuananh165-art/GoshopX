@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "./pb";
+
+message Stock {
+  string product_id = 1;
+  int32 quantity = 2;
+  int32 reorder_level = 3;
+}
+
+message Availability {
+  string product_id = 1;
+  int32 total_quantity = 2;
+  int32 reserved_quantity = 3;
+  int32 available_quantity = 4;
+  int32 reorder_level = 5;
+  bool low_stock = 6;
+}
+
+message Reservation {
+  string reservation_id = 1;
+  uint64 account_id = 2;
+  string product_id = 3;
+  int32 quantity = 4;
+  string status = 5;
+  string source = 6;
+  int64 expires_at_unix = 7;
+}
+
+message UpsertStockRequest {
+  string product_id = 1;
+  int32 quantity = 2;
+  int32 reorder_level = 3;
+}
+
+message AvailabilityRequest {
+  string product_id = 1;
+}
+
+message ReserveStockRequest {
+  string reservation_id = 1;
+  uint64 account_id = 2;
+  string product_id = 3;
+  int32 quantity = 4;
+  int64 ttl_seconds = 5;
+  string source = 6;
+}
+
+message ReservationRequest {
+  string reservation_id = 1;
+}
+
+message ListLowStockRequest {
+  uint64 limit = 1;
+}
+
+message UpsertStockResponse {
+  Stock stock = 1;
+  Availability availability = 2;
+}
+
+message ReserveStockResponse {
+  Reservation reservation = 1;
+  Availability availability = 2;
+}
+
+message ReservationResponse {
+  Reservation reservation = 1;
+  Availability availability = 2;
+}
+
+message ListLowStockResponse {
+  repeated Stock stocks = 1;
+}
+
+service InventoryService {
+  rpc UpsertStock(UpsertStockRequest) returns (UpsertStockResponse) {}
+  rpc GetAvailability(AvailabilityRequest) returns (Availability) {}
+  rpc ReserveStock(ReserveStockRequest) returns (ReserveStockResponse) {}
+  rpc ReleaseReservation(ReservationRequest) returns (ReservationResponse) {}
+  rpc CommitReservation(ReservationRequest) returns (ReservationResponse) {}
+  rpc ListLowStock(ListLowStockRequest) returns (ListLowStockResponse) {}
+}

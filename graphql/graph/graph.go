@@ -1,51 +1,58 @@
-package graph
+﻿package graph
 
 import (
 	"github.com/99designs/gqlgen/graphql"
 
-	account "github.com/rasadov/EcommerceAPI/account/client"
-	"github.com/rasadov/EcommerceAPI/graphql/generated"
-	order "github.com/rasadov/EcommerceAPI/order/client"
-	payment "github.com/rasadov/EcommerceAPI/payment/client"
-	product "github.com/rasadov/EcommerceAPI/product/client"
-	recommender "github.com/rasadov/EcommerceAPI/recommender/client"
+	account "github.com/Tuananh165art/GoshopX/account/client"
+	cart "github.com/Tuananh165art/GoshopX/cart/client"
+	"github.com/Tuananh165art/GoshopX/graphql/generated"
+	inventory "github.com/Tuananh165art/GoshopX/inventory/client"
+	notification "github.com/Tuananh165art/GoshopX/notification/client"
+	order "github.com/Tuananh165art/GoshopX/order/client"
+	payment "github.com/Tuananh165art/GoshopX/payment/client"
+	product "github.com/Tuananh165art/GoshopX/product/client"
+	recommender "github.com/Tuananh165art/GoshopX/recommender/client"
 )
 
 type Server struct {
-	accountClient     *account.Client
-	productClient     *product.Client
-	orderClient       *order.Client
-	paymentClient     *payment.Client
-	recommenderClient *recommender.Client
+	accountClient      *account.Client
+	productClient      *product.Client
+	orderClient        *order.Client
+	paymentClient      *payment.Client
+	recommenderClient  *recommender.Client
+	inventoryClient    *inventory.Client
+	cartClient         *cart.Client
+	notificationClient *notification.Client
 }
 
-func NewGraphQLServer(accountUrl, productUrl, orderUrl, paymentUrl, recommenderUrl string) (*Server, error) {
-	accClient, err := account.NewClient(accountUrl)
+func NewGraphQLServer(accountURL, productURL, orderURL, paymentURL, recommenderURL, inventoryURL, cartURL, notificationURL string) (*Server, error) {
+	accClient, err := account.NewClient(accountURL)
 	if err != nil {
 		return nil, err
 	}
 
-	prodClient, err := product.NewClient(productUrl)
+	prodClient, err := product.NewClient(productURL)
 	if err != nil {
 		accClient.Close()
 		return nil, err
 	}
 
-	ordClient, err := order.NewClient(orderUrl)
+	ordClient, err := order.NewClient(orderURL)
 	if err != nil {
 		accClient.Close()
 		prodClient.Close()
 		return nil, err
 	}
 
-	paymentClient, err := payment.NewClient(paymentUrl)
+	paymentClient, err := payment.NewClient(paymentURL)
 	if err != nil {
 		accClient.Close()
 		prodClient.Close()
 		ordClient.Close()
+		return nil, err
 	}
 
-	recClient, err := recommender.NewClient(recommenderUrl)
+	recClient, err := recommender.NewClient(recommenderURL)
 	if err != nil {
 		accClient.Close()
 		prodClient.Close()
@@ -54,31 +61,49 @@ func NewGraphQLServer(accountUrl, productUrl, orderUrl, paymentUrl, recommenderU
 		return nil, err
 	}
 
+	inventoryClient, err := inventory.NewClient(inventoryURL)
+	if err != nil {
+		accClient.Close()
+		prodClient.Close()
+		ordClient.Close()
+		paymentClient.Close()
+		recClient.Close()
+		return nil, err
+	}
+
+	cartClient, err := cart.NewClient(cartURL)
+	if err != nil {
+		accClient.Close()
+		prodClient.Close()
+		ordClient.Close()
+		paymentClient.Close()
+		recClient.Close()
+		inventoryClient.Close()
+		return nil, err
+	}
+
+	notificationClient, err := notification.NewClient(notificationURL)
+	if err != nil {
+		accClient.Close()
+		prodClient.Close()
+		ordClient.Close()
+		paymentClient.Close()
+		recClient.Close()
+		inventoryClient.Close()
+		cartClient.Close()
+		return nil, err
+	}
+
 	return &Server{
-		accountClient:     accClient,
-		productClient:     prodClient,
-		orderClient:       ordClient,
-		paymentClient:     paymentClient,
-		recommenderClient: recClient,
+		accountClient:      accClient,
+		productClient:      prodClient,
+		orderClient:        ordClient,
+		paymentClient:      paymentClient,
+		recommenderClient:  recClient,
+		inventoryClient:    inventoryClient,
+		cartClient:         cartClient,
+		notificationClient: notificationClient,
 	}, nil
-}
-
-func (server *Server) Mutation() generated.MutationResolver {
-	return &mutationResolver{
-		server: server,
-	}
-}
-
-func (server *Server) Query() generated.QueryResolver {
-	return &queryResolver{
-		server: server,
-	}
-}
-
-func (server *Server) Account() generated.AccountResolver {
-	return &accountResolver{
-		server: server,
-	}
 }
 
 func (server *Server) ToExecutableSchema() graphql.ExecutableSchema {
@@ -86,3 +111,20 @@ func (server *Server) ToExecutableSchema() graphql.ExecutableSchema {
 		Resolvers: server,
 	})
 }
+
+func (server *Server) Mutation() generated.MutationResolver {
+	return &mutationResolver{server: server}
+}
+
+func (server *Server) Query() generated.QueryResolver {
+	return &queryResolver{server: server}
+}
+
+func (server *Server) Account() generated.AccountResolver {
+	return &accountResolver{server: server}
+}
+
+func (server *Server) Product() generated.ProductResolver {
+	return &productResolver{server: server}
+}
+

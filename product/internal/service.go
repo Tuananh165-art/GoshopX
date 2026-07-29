@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/rasadov/EcommerceAPI/pkg/kafka"
-	"github.com/rasadov/EcommerceAPI/product/models"
+	"github.com/Tuananh165art/GoshopX/pkg/kafka"
+	"github.com/Tuananh165art/GoshopX/product/models"
 )
 
 type Service interface {
@@ -163,3 +163,4 @@ func (service productService) DeleteProduct(ctx context.Context, productId strin
 
 	return service.repo.DeleteProduct(ctx, productId)
 }
+

@@ -1,11 +1,11 @@
-package internal
+﻿package internal
 
 import (
 	"context"
 	"log"
 
+	"github.com/Tuananh165art/GoshopX/account/models"
 	_ "github.com/lib/pq"
-	"github.com/rasadov/EcommerceAPI/account/models"
 	"gorm.io/gorm"
 )
 
@@ -89,3 +89,4 @@ func (repository *postgresRepository) ListAccounts(ctx context.Context, skip uin
 	}
 	return accounts, nil
 }
+

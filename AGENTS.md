@@ -20,3 +20,14 @@ Recent history uses conventional prefixes such as `fix(recommender): ...`, `chor
 
 ## Security & Configuration Tips
 Do not commit secrets or local runtime state. Keep environment-specific values in `.env` or your shell, and treat Docker/Kafka/Postgres credentials in Compose as local defaults only. If you touch the recommender or Docker setup, verify the full stack still starts cleanly with `docker compose up --build -d`.
+
+## BMAD, Agile/Scrum & Role Playbooks
+Use the repo-local operating model before broad changes:
+
+- `.agents/rules/project-rules.md`: non-negotiable engineering, business, security, and verification rules.
+- `.agents/memory/goshopx-project-memory.md`: stable product/domain memory for future agents.
+- `.agents/agents/`: role charters for Frontend, Backend, DevOps, Tester, Solution Architect, PM, BA, and Cyber Security.
+- `.agents/skills/`: role-triggered skills with the exact GoshopX workflow each role should follow.
+- `docs/00-index.md`: documentation entry point for BMAD, Scrum delivery, business rules, and architecture decisions.
+
+For implementation work, keep the public client boundary at GraphQL, keep gRPC internal, publish cross-service business facts through Kafka, and verify with focused tests before claiming completion.

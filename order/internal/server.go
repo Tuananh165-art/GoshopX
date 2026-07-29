@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"log"
 	"net"
 
+	account "github.com/Tuananh165art/GoshopX/account/client"
+	"github.com/Tuananh165art/GoshopX/order/models"
+	"github.com/Tuananh165art/GoshopX/order/proto/pb"
+	product "github.com/Tuananh165art/GoshopX/product/client"
 	mapset "github.com/deckarep/golang-set/v2"
-	account "github.com/rasadov/EcommerceAPI/account/client"
-	"github.com/rasadov/EcommerceAPI/order/models"
-	"github.com/rasadov/EcommerceAPI/order/proto/pb"
-	product "github.com/rasadov/EcommerceAPI/product/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -195,3 +195,4 @@ func (server *grpcServer) UpdateOrderStatus(ctx context.Context, request *pb.Upd
 
 	return &emptypb.Empty{}, nil
 }
+

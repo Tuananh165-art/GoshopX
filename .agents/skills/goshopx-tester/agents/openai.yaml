@@ -1,0 +1,4 @@
+interface:
+  display_name: "GoshopX Tester"
+  short_description: "Verify business and contract behavior"
+  default_prompt: "Use this role skill to plan, implement, and report tests for GoshopX features and regressions."

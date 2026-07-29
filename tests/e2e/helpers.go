@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rasadov/EcommerceAPI/pkg/auth"
+	"github.com/Tuananh165art/GoshopX/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -132,3 +132,4 @@ func doRequest(t *testing.T, query string, variables map[string]interface{}) Gra
 	assert.NoError(t, err)
 	return gqlResp
 }
+

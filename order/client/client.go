@@ -1,12 +1,12 @@
-package client
+﻿package client
 
 import (
 	"context"
 	"log"
 	"time"
 
-	"github.com/rasadov/EcommerceAPI/order/models"
-	"github.com/rasadov/EcommerceAPI/order/proto/pb"
+	"github.com/Tuananh165art/GoshopX/order/models"
+	"github.com/Tuananh165art/GoshopX/order/proto/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -124,3 +124,4 @@ func (client *Client) UpdateOrderStatus(ctx context.Context, orderId uint64, sta
 
 	return nil
 }
+

@@ -1,4 +1,4 @@
-package auth
+﻿package auth
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/rasadov/EcommerceAPI/pkg/contextkeys"
+	"github.com/Tuananh165art/GoshopX/pkg/contextkeys"
 )
 
 func GetUserId(ctx context.Context, abort bool) string {
@@ -32,3 +32,4 @@ func GetUserIdInt(ctx context.Context, abort bool) (int, error) {
 	}
 	return int(accountId), nil
 }
+

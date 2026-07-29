@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "./pb";
+
+message Notification {
+  uint64 id = 1;
+  uint64 account_id = 2;
+  string event_id = 3;
+  string event_type = 4;
+  string title = 5;
+  string message = 6;
+  string metadata_json = 7;
+  bool is_read = 8;
+  int64 created_at_unix = 9;
+  int64 read_at_unix = 10;
+}
+
+message ListNotificationsRequest {
+  uint64 account_id = 1;
+  uint64 skip = 2;
+  uint64 take = 3;
+}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+}
+
+message CountUnreadRequest {
+  uint64 account_id = 1;
+}
+
+message CountUnreadResponse {
+  int64 count = 1;
+}
+
+message MarkReadRequest {
+  uint64 account_id = 1;
+  uint64 notification_id = 2;
+}
+
+message MarkReadResponse {
+  bool ok = 1;
+}
+
+message MarkAllReadRequest {
+  uint64 account_id = 1;
+}
+
+message MarkAllReadResponse {
+  int64 updated_count = 1;
+}
+
+service NotificationService {
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse) {}
+  rpc CountUnread(CountUnreadRequest) returns (CountUnreadResponse) {}
+  rpc MarkRead(MarkReadRequest) returns (MarkReadResponse) {}
+  rpc MarkAllRead(MarkAllReadRequest) returns (MarkAllReadResponse) {}
+}

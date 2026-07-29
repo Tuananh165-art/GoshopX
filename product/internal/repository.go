@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/olivere/elastic.v5"
 
-	"github.com/rasadov/EcommerceAPI/product/models"
+	"github.com/Tuananh165art/GoshopX/product/models"
 )
 
 var (
@@ -197,3 +197,4 @@ func (r *elasticRepository) DeleteProduct(ctx context.Context, productId string)
 		Do(ctx)
 	return err
 }
+

@@ -1,4 +1,4 @@
-package internal
+﻿package internal
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/rasadov/EcommerceAPI/product/models"
-	"github.com/rasadov/EcommerceAPI/product/proto/pb"
+	"github.com/Tuananh165art/GoshopX/product/models"
+	"github.com/Tuananh165art/GoshopX/product/proto/pb"
 )
 
 type grpcServer struct {
@@ -113,3 +113,4 @@ func (s *grpcServer) DeleteProduct(ctx context.Context, r *pb.DeleteProductReque
 	}
 	return &emptypb.Empty{}, nil
 }
+

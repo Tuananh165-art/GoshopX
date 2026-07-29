@@ -1,0 +1,4 @@
+interface:
+  display_name: "GoshopX Cyber Security"
+  short_description: "Review security risks and controls"
+  default_prompt: "Use this role skill to threat-model and review GoshopX auth, payment, secrets, and supply-chain risk."
