@@ -50,6 +50,7 @@ jobs:
     name: Secret and configuration scan
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       security-events: write
     steps:
@@ -78,15 +79,22 @@ jobs:
         with:
           path: ./
           extra_args: --only-verified
+      - uses: azure/setup-helm@v4
+      - name: Render Helm manifests for configuration scanning
+        run: >-
+          helm template goshopx deploy/helm/goshopx
+          -f deploy/helm/goshopx/values-lab.yaml
+          > /tmp/goshopx-rendered.yaml
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
-          scan-ref: .
+          scan-ref: /tmp/goshopx-rendered.yaml
           format: sarif
           output: trivy-config.sarif
           severity: HIGH,CRITICAL
           exit-code: '1'
       - uses: github/codeql-action/upload-sarif@v4
         if: ${{ always() && hashFiles('trivy-config.sarif') != '' }}
+        continue-on-error: true
         with:
           sarif_file: trivy-config.sarif

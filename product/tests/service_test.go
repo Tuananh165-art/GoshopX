@@ -43,6 +43,14 @@ func (m *MockRepository) ListProducts(ctx context.Context, skip, take uint64) ([
 	return args.Get(0).([]*models.Product), args.Error(1)
 }
 
+func (m *MockRepository) ListAllProducts(ctx context.Context, skip, take uint64) ([]*models.Product, error) {
+	args := m.Called(ctx, skip, take)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Product), args.Error(1)
+}
+
 func (m *MockRepository) ListProductsByCategory(ctx context.Context, category string, skip, take uint64) ([]*models.Product, error) {
 	args := m.Called(ctx, category, skip, take)
 	if args.Get(0) == nil {
