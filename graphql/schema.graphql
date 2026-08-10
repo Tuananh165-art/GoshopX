@@ -1,10 +1,31 @@
 scalar Time
+scalar Upload
 
 type Account {
     id: Int!
     name: String!
     email: String!
+    avatarUrl: String!
+    phone: String!
+    shippingAddress: String!
+    roleId: Int!
+    role: AccountRole!
+    status: AccountStatus!
     orders: [Order!]!
+}
+
+enum AccountRole {
+    CUSTOMER
+    ADMIN
+    SELLER
+    SUPPORT_ADMIN
+    OPERATIONS_ADMIN
+    PLATFORM_ADMIN
+}
+
+enum AccountStatus {
+    ACTIVE
+    SUSPENDED
 }
 
 type InventoryAvailability {
@@ -23,7 +44,57 @@ type Product {
     price: Float!
     accountId: Int!
     availability: InventoryAvailability
+    categoryId: String!
+    publishStatus: String!
+    moderationStatus: String!
+    moderationReason: String!
+    media: [ProductMedia!]!
+    discountPercentage: Float!
+    rating: Float!
+    stock: Int!
+    tags: [String!]!
+    brand: String!
+    sku: String!
+    weight: Float!
+    dimensions: ProductDimensions!
+    warrantyInformation: String!
+    shippingInformation: String!
+    availabilityStatus: String!
+    reviews: [ProductReview!]!
+    returnPolicy: String!
+    minimumOrderQuantity: Int!
+    meta: ProductMeta!
+    thumbnail: String!
+    images: [String!]!
 }
+
+type RecommendationChatProduct {
+    id: String!
+    name: String!
+    description: String!
+    price: Float!
+    currency: String!
+    thumbnail: String!
+    images: [String!]!
+    rating: Float!
+    stock: Int!
+    retrievalScore: Float!
+    matchedReasons: [String!]!
+}
+
+type RecommendationChatResponse {
+    answer: String!
+    products: [RecommendationChatProduct!]!
+    nextSuggestions: [String!]!
+    warnings: [String!]!
+    requestId: String!
+}
+
+type ProductMedia { id: String!, url: String!, altText: String!, sortOrder: Int! }
+type ProductDimensions { width: Float!, height: Float!, depth: Float! }
+type ProductReview { rating: Int!, comment: String!, date: String!, reviewerName: String!, reviewerEmail: String! }
+type ProductMeta { createdAt: String!, updatedAt: String!, barcode: String!, qrCode: String! }
+type Category { id: String!, name: String!, slug: String!, description: String!, isActive: Boolean! }
 
 type CartItem {
     product: Product!
@@ -72,6 +143,43 @@ type RedirectResponse {
     url: String!
 }
 
+type CODCheckoutResponse {
+    orderId: Int!
+    status: String!
+}
+
+type AdminProductMetric {
+    productId: String!
+    quantity: Int!
+    gmv: Float!
+}
+
+type AdminDashboard {
+    gmv: Float!
+    revenue: Float!
+    orderCount: Int!
+    averageOrderValue: Float!
+    paymentAttempts: Int!
+    successfulPayments: Int!
+    paymentSuccessRate: Float!
+    topProducts: [AdminProductMetric!]!
+}
+
+type AdminAuditEvent {
+    eventId: String!
+    actorAccountId: Int!
+    targetAccountId: Int!
+    action: String!
+    outcome: String!
+    requestId: String!
+    occurredAt: Time!
+}
+
+type AdminOrder { id: Int!, accountId: Int!, totalPrice: Float!, status: String!, paymentStatus: String!, createdAt: Time!, products: [OrderedProduct!]! }
+type PaymentTransaction { orderId: Int!, userId: Int!, paymentId: String!, totalPrice: Int!, settledPrice: Int!, currency: String!, status: String! }
+type RefundResult { providerRefundId: String!, status: String!, amount: Int! }
+type StockReservation { reservationId: String!, accountId: Int!, productId: String!, quantity: Int!, status: String!, source: String!, expiresAt: Time! }
+
 input PaginationInput {
     skip: Int!
     take: Int!
@@ -86,6 +194,27 @@ input RegisterInput {
 input LoginInput {
     email: String!
     password: String!
+}
+
+input GoogleLoginInput {
+    credential: String!
+}
+
+input RecommendationChatInput {
+    text: String!
+    imageUrl: String
+    image: Upload
+    sessionId: String
+    viewedProductIds: [String!]
+    limit: Int = 5
+}
+
+input ProfileInput {
+    name: String!
+    email: String!
+    avatarUrl: String!
+    phone: String!
+    shippingAddress: String!
 }
 
 input CreateProductInput {
@@ -136,9 +265,23 @@ input UpsertProductStockInput {
     reorderLevel: Int!
 }
 
+input CreateCategoryInput { name: String!, slug: String!, description: String!, isActive: Boolean! }
+input ModerateProductInput { productId: String!, publishStatus: String!, moderationStatus: String!, moderationReason: String! }
+input AddProductMediaInput { productId: String!, url: String!, altText: String!, sortOrder: Int! }
+input AdminProductInput { id: String, name: String!, description: String!, price: Float!, categoryId: String!, brand: String!, sku: String!, thumbnail: String!, images: [String!]!, tags: [String!]!, publishStatus: String, moderationStatus: String, moderationReason: String }
+input AdminOrderFilter { status: String, paymentStatus: String, accountId: Int, pagination: PaginationInput }
+input RefundInput { paymentId: String!, reason: String!, idempotencyKey: String! }
+input InventoryAdjustmentInput { productId: String!, delta: Int!, reorderLevel: Int!, reason: String! }
+
 type Mutation {
     register(account: RegisterInput!): AuthResponse
     login(account: LoginInput!): AuthResponse
+    loginWithGoogle(account: GoogleLoginInput!): AuthResponse
+    requestPasswordReset(email: String!): Boolean!
+    resetPassword(email: String!, otp: String!, newPassword: String!): Boolean!
+    updateMyProfile(input: ProfileInput!): Account!
+    logout: Boolean!
+    recommendChat(input: RecommendationChatInput!): RecommendationChatResponse!
     createProduct(product: CreateProductInput!): Product
     updateProduct(product: UpdateProductInput!): Product
     deleteProduct(id: String!): Boolean
@@ -148,17 +291,47 @@ type Mutation {
     upsertProductStock(input: UpsertProductStockInput!): InventoryAvailability!
     addCartItem(productId: String!, quantity: Int!): Cart!
     updateCartItemQuantity(productId: String!, quantity: Int!): Cart!
+    addProductReview(productId: String!, rating: Int!, comment: String!): Product!
     removeCartItem(productId: String!): Cart!
     clearCart: Boolean!
     checkoutCart(redirectUrl: String!): RedirectResponse!
+    checkoutCartCOD: CODCheckoutResponse!
     markNotificationRead(id: Int!): Boolean!
     markAllNotificationsRead: Int!
+    suspendAccount(id: Int!): Boolean!
+    reactivateAccount(id: Int!): Boolean!
+    setAccountRole(id: Int!, role: AccountRole!): Account!
+    adminCreateCategory(input: CreateCategoryInput!): Category!
+    adminModerateProduct(input: ModerateProductInput!): Product!
+    adminAddProductMedia(input: AddProductMediaInput!): Product!
+    adminUploadProductMedia(productId: String!, file: Upload!, altText: String!, sortOrder: Int!): Product!
+    adminCreateProduct(input: AdminProductInput!): Product!
+    adminUpdateProduct(input: AdminProductInput!): Product!
+    adminDeleteProduct(id: String!): Boolean!
+    adminCancelOrder(orderId: Int!, reason: String!): AdminOrder!
+    adminRequestRefund(input: RefundInput!): RefundResult!
+    adminAdjustInventory(input: InventoryAdjustmentInput!): InventoryAvailability!
 }
 
 type Query{
     accounts(pagination: PaginationInput, id: Int): [Account!]!
-    product(pagination: PaginationInput, query: String, id: String, viewedProductsIds: [String], byAccountId: Boolean): [Product!]!
+    adminAccounts(pagination: PaginationInput): [Account!]!
+    me: Account
+    product(pagination: PaginationInput, query: String, category: String, id: String, viewedProductsIds: [String], byAccountId: Boolean): [Product!]!
+    adminProducts(pagination: PaginationInput): [Product!]!
+    canReviewProduct(productId: String!): Boolean!
+    myOrders: [Order!]!
+    myPaymentTransactions(orderId: Int!): [PaymentTransaction!]!
     myCart: Cart!
     notifications(pagination: PaginationInput): [Notification!]!
     unreadNotificationCount: Int!
+    adminDashboard(from: Time!, to: Time!, topProductsLimit: Int = 10): AdminDashboard!
+    adminAuditEvents(pagination: PaginationInput, actorAccountId: Int, action: String, from: Time, to: Time): [AdminAuditEvent!]!
+    categories(activeOnly: Boolean! = true): [Category!]!
+    adminOrders(filter: AdminOrderFilter): [AdminOrder!]!
+    adminOrder(id: Int!): AdminOrder!
+    adminTransactions(status: String, orderId: Int, pagination: PaginationInput): [PaymentTransaction!]!
+    adminReconcileTransaction(paymentId: String!): PaymentTransaction!
+    adminLowStock(limit: Int! = 50): [InventoryAvailability!]!
+    adminReservations(status: String, pagination: PaginationInput): [StockReservation!]!
 }

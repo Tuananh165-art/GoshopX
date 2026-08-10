@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Tuananh165art/GoshopX/inventory/models"
+	"github.com/Tuananh165art/GoshopX/pkg/migrations"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -23,6 +24,52 @@ type Repository interface {
 	CommitReservation(ctx context.Context, reservationID string) (*models.StockReservation, *models.Availability, error)
 	ListLowStock(ctx context.Context, limit uint64) ([]*models.Stock, error)
 	CleanupExpiredReservations(ctx context.Context) (int64, error)
+	AdjustStock(ctx context.Context, productID string, delta int32, reorderLevel int32) (*models.Stock, error)
+	ListReservations(ctx context.Context, status string, skip, take uint64) ([]*models.StockReservation, error)
+}
+
+func (repository *postgresRepository) AdjustStock(ctx context.Context, productID string, delta int32, reorderLevel int32) (*models.Stock, error) {
+	tx := repository.db.WithContext(ctx).Begin()
+	stock, err := repository.lockStock(ctx, tx, productID)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	if stock.Quantity+delta < 0 {
+		tx.Rollback()
+		return nil, ErrInsufficientStock
+	}
+	stock.Quantity += delta
+	if reorderLevel >= 0 {
+		stock.ReorderLevel = reorderLevel
+	}
+	stock.UpdatedAt = time.Now().UTC()
+	if err := tx.Save(stock).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+	return stock, nil
+}
+
+func (repository *postgresRepository) ListReservations(ctx context.Context, status string, skip, take uint64) ([]*models.StockReservation, error) {
+	if _, err := repository.CleanupExpiredReservations(ctx); err != nil {
+		return nil, err
+	}
+	query := repository.db.WithContext(ctx).Order("created_at DESC")
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if take > 0 {
+		query = query.Offset(int(skip)).Limit(int(take))
+	}
+	var items []*models.StockReservation
+	if err := query.Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 type postgresRepository struct {
@@ -30,7 +77,9 @@ type postgresRepository struct {
 }
 
 func NewPostgresRepository(db *gorm.DB) (Repository, error) {
-	if err := db.AutoMigrate(&models.Stock{}, &models.StockReservation{}, &models.InventoryEventOutbox{}); err != nil {
+	if err := migrations.Run(db, "inventory", "001_initial", func(db *gorm.DB) error {
+		return db.AutoMigrate(&models.Stock{}, &models.StockReservation{}, &models.InventoryEventOutbox{})
+	}); err != nil {
 		return nil, err
 	}
 
@@ -405,4 +454,3 @@ func toAvailability(stock *models.Stock, reservedQuantity int32) *models.Availab
 		HasActiveLowStock: available <= stock.ReorderLevel,
 	}
 }
-

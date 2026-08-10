@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: goshopx-lab
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/REPLACE_OWNER/GoshopX.git
+    targetRevision: main
+    path: deploy/helm/goshopx
+    helm:
+      valueFiles:
+        - values-lab.yaml
+      parameters:
+        - name: global.imageRegistry
+          value: ghcr.io/REPLACE_OWNER
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: goshopx
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true

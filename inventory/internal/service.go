@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -26,7 +26,28 @@ type Service interface {
 	CommitReservation(ctx context.Context, reservationID string) (*models.StockReservation, *models.Availability, error)
 	ListLowStock(ctx context.Context, limit uint64) ([]*models.Stock, error)
 	CleanupExpiredReservations(ctx context.Context) (int64, error)
+	AdjustStock(ctx context.Context, productID string, delta, reorderLevel int32, reason string) (*models.Stock, *models.Availability, error)
+	ListReservations(ctx context.Context, status string, skip, take uint64) ([]*models.StockReservation, error)
 	GetProducer() sarama.AsyncProducer
+}
+
+func (service *inventoryService) AdjustStock(ctx context.Context, productID string, delta, reorderLevel int32, reason string) (*models.Stock, *models.Availability, error) {
+	if reason == "" {
+		return nil, nil, errors.New("adjustment reason is required")
+	}
+	stock, err := service.repository.AdjustStock(ctx, productID, delta, reorderLevel)
+	if err != nil {
+		return nil, nil, err
+	}
+	availability, err := service.repository.GetAvailability(ctx, productID)
+	if err != nil {
+		return nil, nil, err
+	}
+	service.publishInventoryEvent("inventory.adjusted", 0, productID, models.EventData{ProductID: productID, Quantity: delta, ReorderLevel: stock.ReorderLevel, AvailableQty: availability.AvailableQuantity, ReservedQty: availability.ReservedQuantity, Status: "adjusted:" + reason})
+	return stock, availability, nil
+}
+func (service *inventoryService) ListReservations(ctx context.Context, status string, skip, take uint64) ([]*models.StockReservation, error) {
+	return service.repository.ListReservations(ctx, status, skip, take)
 }
 
 type inventoryService struct {
@@ -145,4 +166,3 @@ func (service *inventoryService) publishInventoryEvent(eventType string, account
 		_ = kafka.SendMessage(service, sharedevents.New(eventType, accountID, eventKey, data), config.InventoryTopic)
 	}()
 }
-

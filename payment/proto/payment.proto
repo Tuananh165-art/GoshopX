@@ -1,34 +1,13 @@
 syntax = "proto3";
 import "google/protobuf/wrappers.proto";
-
 package pb;
-
 option go_package = "./pb";
-
-message CheckoutCartItem {
-  string productId = 1;
-  uint64 quantity = 2;
-}
-
-message CheckoutRequest {
-  uint64 userId = 1;
-  string email = 2;
-  string name = 3;
-  string redirectURL = 4;
-  repeated CheckoutCartItem products = 5;
-  uint64 orderId = 6;
-  repeated string reservationIds = 7;
-}
-
-message CustomerPortalRequest {
-  uint64 userId = 1;
-  optional string email = 2;
-  optional string name = 3;
-}
-
-service PaymentService {
-  rpc CreateCheckoutSession (CheckoutRequest) returns (google.protobuf.StringValue) {
-  }
-  rpc CreateCustomerPortalSession (CustomerPortalRequest) returns (google.protobuf.StringValue) {
-  }
-}
+message CheckoutCartItem { string productId = 1; uint64 quantity = 2; }
+message CheckoutRequest { uint64 userId = 1; string email = 2; string name = 3; string redirectURL = 4; repeated CheckoutCartItem products = 5; uint64 orderId = 6; repeated string reservationIds = 7; string client_ip = 8; }
+message CustomerPortalRequest { uint64 userId = 1; optional string email = 2; optional string name = 3; }
+service PaymentService { rpc CreateCheckoutSession (CheckoutRequest) returns (google.protobuf.StringValue) {} rpc CreateCustomerPortalSession (CustomerPortalRequest) returns (google.protobuf.StringValue) {} rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse) {} rpc RequestRefund(RefundRequest) returns (RefundResponse) {} rpc ReconcileTransaction(google.protobuf.StringValue) returns (Transaction) {} }
+message Transaction { uint64 id = 1; uint64 order_id = 2; uint64 user_id = 3; string payment_id = 4; int64 total_price = 5; int64 settled_price = 6; string currency = 7; string status = 8; }
+message ListTransactionsRequest { string status = 1; uint64 order_id = 2; uint64 skip = 3; uint64 take = 4; }
+message ListTransactionsResponse { repeated Transaction transactions = 1; }
+message RefundRequest { string payment_id = 1; string reason = 2; string idempotency_key = 3; }
+message RefundResponse { string provider_refund_id = 1; string status = 2; int64 amount = 3; }

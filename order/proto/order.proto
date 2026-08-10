@@ -20,6 +20,8 @@ message Order {
   uint64 accountId = 3;
   double totalPrice = 4;
   repeated ProductInfo products = 5;
+  string status = 6;
+  string payment_status = 7;
 }
 
 message OrderProduct {
@@ -45,6 +47,10 @@ message UpdateOrderStatusRequest {
   string status = 2;
 }
 
+message ListOrdersRequest { string status = 1; string payment_status = 2; uint64 account_id = 3; uint64 skip = 4; uint64 take = 5; }
+message ListOrdersResponse { repeated Order orders = 1; }
+message CancelOrderRequest { uint64 order_id = 1; string reason = 2; string actor_role = 3; }
+
 service OrderService {
   rpc PostOrder (PostOrderRequest) returns (PostOrderResponse) {
   }
@@ -52,4 +58,7 @@ service OrderService {
   }
   rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (google.protobuf.Empty) {
   }
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {}
+  rpc GetOrder(google.protobuf.UInt64Value) returns (PostOrderResponse) {}
+  rpc CancelOrder(CancelOrderRequest) returns (PostOrderResponse) {}
 }

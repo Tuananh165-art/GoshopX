@@ -19,6 +19,9 @@ models:
   Time:
     model:
       - github.com/99designs/gqlgen/graphql.Time
+  Upload:
+    model:
+      - github.com/99designs/gqlgen/graphql.Upload
   Account:
     fields:
       orders:

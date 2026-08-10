@@ -1,10 +1,11 @@
-﻿package main
+package main
 
 import (
 	"log"
 	"time"
 
 	"github.com/IBM/sarama"
+	accountclient "github.com/Tuananh165art/GoshopX/account/client"
 	"github.com/Tuananh165art/GoshopX/notification/config"
 	"github.com/Tuananh165art/GoshopX/notification/internal"
 	"github.com/tinrab/retry"
@@ -42,8 +43,21 @@ func main() {
 		})
 	}
 
-	service := internal.NewNotificationService(repository)
+	var emailSender internal.EmailSender
+	if config.GmailUsername != "" && config.GmailPassword != "" && config.GmailFrom != "" {
+		emailSender = internal.NewSMTPEmailSender(config.GmailSMTPHost, config.GmailSMTPPort, config.GmailUsername, config.GmailPassword, config.GmailFrom)
+		log.Printf("Gmail notification delivery enabled for %s", config.GmailFrom)
+	} else {
+		log.Println("Gmail notification delivery disabled: GMAIL_USERNAME/GMAIL_PASSWORD/GMAIL_FROM are not fully configured")
+	}
+	accountResolver, err := accountclient.NewClient(config.AccountServiceURL)
+	if err != nil {
+		log.Printf("Account email resolver unavailable: %v", err)
+	}
+	if accountResolver != nil {
+		defer accountResolver.Close()
+	}
+	service := internal.NewNotificationServiceWithEmailResolver(repository, emailSender, accountResolver)
 	log.Println("Notification listening on port 8080...")
 	log.Fatal(internal.StartServers(service, consumer, 8080))
 }
-

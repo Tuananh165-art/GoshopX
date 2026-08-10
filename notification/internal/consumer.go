@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -25,7 +25,7 @@ func (consumer *EventConsumer) GetConsumer() sarama.Consumer {
 }
 
 func (consumer *EventConsumer) Start(ctx context.Context) error {
-	topics := []string{config.CartTopic, config.InventoryTopic, config.OrderTopic, config.PaymentTopic}
+	topics := []string{config.CartTopic, config.InventoryTopic, config.OrderTopic, config.PaymentTopic, config.AccountTopic}
 	for _, topic := range topics {
 		topic := topic
 		go func() {
@@ -60,4 +60,3 @@ func (consumer *EventConsumer) handleEvent(partition int32, pc sarama.PartitionC
 		}
 	}
 }
-

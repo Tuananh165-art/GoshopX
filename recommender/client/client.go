@@ -1,4 +1,4 @@
-﻿package client
+package client
 
 import (
 	"context"
@@ -27,24 +27,21 @@ func (client *Client) Close() {
 }
 
 func (client *Client) GetRecommendationForUser(ctx context.Context, userId string, skip, take uint64) (*pb.RecommendationResponse, error) {
-	return client.service.GetRecommendations(
-		ctx,
-		&pb.RecommendationRequestForUserId{
-			UserId: userId,
-			Skip:   skip,
-			Take:   take,
-		},
-	)
+	return client.service.GetRecommendations(ctx, &pb.RecommendationRequestForUserId{UserId: userId, Skip: skip, Take: take})
 }
 
 func (client *Client) GetRecommendationBasedOnViewed(ctx context.Context, ids []string, skip, take uint64) (*pb.RecommendationResponse, error) {
-	return client.service.GetRecommendationsBasedOnViewed(
-		ctx,
-		&pb.RecommendationRequestOnViews{
-			Ids:  ids,
-			Skip: skip,
-			Take: take,
-		},
-	)
+	return client.service.GetRecommendationsBasedOnViewed(ctx, &pb.RecommendationRequestOnViews{Ids: ids, Skip: skip, Take: take})
 }
 
+func (client *Client) ChatRecommend(ctx context.Context, text, imageURL, userID, sessionID string, viewedIDs []string, limit uint32, requestID string) (*pb.ChatRecommendationResponse, error) {
+	return client.service.ChatRecommend(ctx, &pb.ChatRecommendationRequest{
+		Text:             text,
+		ImageUrl:         imageURL,
+		UserId:           userID,
+		SessionId:        sessionID,
+		ViewedProductIds: viewedIDs,
+		Limit:            limit,
+		RequestId:        requestID,
+	})
+}

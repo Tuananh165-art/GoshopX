@@ -1,4 +1,4 @@
-﻿package client
+package client
 
 import (
 	"context"
@@ -85,9 +85,11 @@ func (client *Client) GetOrdersForAccount(ctx context.Context, accountID uint64)
 	var orders []models.Order
 	for _, orderProto := range r.Orders {
 		newOrder := models.Order{
-			ID:         uint(orderProto.Id),
-			TotalPrice: orderProto.TotalPrice,
-			AccountID:  orderProto.AccountId,
+			ID:            uint(orderProto.Id),
+			TotalPrice:    orderProto.TotalPrice,
+			AccountID:     orderProto.AccountId,
+			Status:        orderProto.Status,
+			PaymentStatus: orderProto.PaymentStatus,
 		}
 		newOrder.CreatedAt = time.Time{}
 		err = newOrder.CreatedAt.UnmarshalBinary(orderProto.CreatedAt)
@@ -125,3 +127,45 @@ func (client *Client) UpdateOrderStatus(ctx context.Context, orderId uint64, sta
 	return nil
 }
 
+func decodeOrder(order *pb.Order) (*models.Order, error) {
+	createdAt := time.Time{}
+	if err := createdAt.UnmarshalBinary(order.CreatedAt); err != nil {
+		return nil, err
+	}
+	result := &models.Order{ID: uint(order.Id), CreatedAt: createdAt, AccountID: order.AccountId, TotalPrice: order.TotalPrice, Status: order.Status, PaymentStatus: order.PaymentStatus}
+	for _, item := range order.Products {
+		result.Products = append(result.Products, &models.OrderedProduct{ID: item.Id, Name: item.Name, Description: item.Description, Price: item.Price, Quantity: item.Quantity})
+	}
+	return result, nil
+}
+
+func (client *Client) ListOrders(ctx context.Context, status, paymentStatus string, accountID, skip, take uint64) ([]*models.Order, error) {
+	response, err := client.service.ListOrders(ctx, &pb.ListOrdersRequest{Status: status, PaymentStatus: paymentStatus, AccountId: accountID, Skip: skip, Take: take})
+	if err != nil {
+		return nil, err
+	}
+	orders := make([]*models.Order, 0, len(response.Orders))
+	for _, item := range response.Orders {
+		order, err := decodeOrder(item)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
+
+func (client *Client) GetOrder(ctx context.Context, orderID uint64) (*models.Order, error) {
+	response, err := client.service.GetOrder(ctx, wrapperspb.UInt64(orderID))
+	if err != nil {
+		return nil, err
+	}
+	return decodeOrder(response.Order)
+}
+func (client *Client) CancelOrder(ctx context.Context, orderID uint64, reason, actorRole string) (*models.Order, error) {
+	response, err := client.service.CancelOrder(ctx, &pb.CancelOrderRequest{OrderId: orderID, Reason: reason, ActorRole: actorRole})
+	if err != nil {
+		return nil, err
+	}
+	return decodeOrder(response.Order)
+}

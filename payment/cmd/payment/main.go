@@ -1,66 +1,46 @@
-﻿package main
+package main
 
 import (
-	"log"
-	"time"
-
 	"github.com/IBM/sarama"
 	"github.com/Tuananh165art/GoshopX/payment/config"
 	"github.com/Tuananh165art/GoshopX/payment/internal"
+	"github.com/Tuananh165art/GoshopX/payment/vnpay"
+	productclient "github.com/Tuananh165art/GoshopX/product/client"
 	"github.com/tinrab/retry"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"log"
+	"time"
 )
 
 func main() {
-	var repository internal.Repository
-	var producer sarama.AsyncProducer
+	var repo internal.Repository
 	var err error
-
-	retry.ForeverSleep(2*time.Second, func(_ int) (err error) {
-		db, err := gorm.Open(postgres.Open(config.DatabaseURL), &gorm.Config{})
-		if err != nil {
-			log.Println(err)
+	retry.ForeverSleep(2*time.Second, func(_ int) error {
+		db, e := gorm.Open(postgres.Open(config.DatabaseURL), &gorm.Config{})
+		if e != nil {
+			return e
 		}
-		repository, err = internal.NewPostgresRepository(db)
-		if err != nil {
-			log.Println(err)
-		}
-		return
+		repo, e = internal.NewPostgresRepository(db)
+		return e
 	})
-
+	var producer sarama.AsyncProducer
 	if config.KafkaBrokers != "" {
 		producer, err = sarama.NewAsyncProducer([]string{config.KafkaBrokers}, nil)
 		if err != nil {
-			log.Printf("Failed to create Kafka producer: %v", err)
+			log.Printf("Kafka producer unavailable: %v", err)
 			producer = nil
-		} else {
-			defer func() {
-				if err := producer.Close(); err != nil {
-					log.Println(err)
-				}
-			}()
 		}
 	}
-
-	// Setup Kafka consumer
-	var consumer sarama.Consumer
-	if config.KafkaBrokers != "" {
-		retry.ForeverSleep(2*time.Second, func(_ int) (err error) {
-			kafkaConfig := sarama.NewConfig()
-			kafkaConfig.Consumer.Return.Errors = true
-
-			consumer, err = sarama.NewConsumer([]string{config.KafkaBrokers}, kafkaConfig)
-			if err != nil {
-				log.Printf("Failed to create Kafka consumer: %v", err)
-			}
-			return
-		})
+	client, err := vnpay.NewClient(vnpay.Config{TmnCode: config.VNPAYTmnCode, HashSecret: config.VNPAYHashSecret, PaymentURL: config.VNPAYPaymentURL})
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	dodoClient := internal.NewDodoClient(config.DodoAPIKEY, config.DodoTestMode)
-	service := internal.NewPaymentService(dodoClient, repository, producer)
-
-	log.Fatal(internal.StartServers(service, consumer, config.OrderServiceURL, config.InventoryServiceURL, config.CartServiceURL, config.GrpcPort, config.WebhookPort))
+	catalog, err := productclient.NewClient(config.ProductServiceURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer catalog.Close()
+	service := internal.NewVNPAYPaymentServiceWithCatalog(client, repo, producer, catalog)
+	log.Fatal(internal.StartServers(service, nil, config.OrderServiceURL, config.InventoryServiceURL, config.CartServiceURL, config.GrpcPort, config.WebhookPort))
 }
-

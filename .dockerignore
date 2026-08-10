@@ -13,3 +13,6 @@ docs
 tests
 **/tests
 design.png
+web/node_modules
+web/dist
+web/test-results

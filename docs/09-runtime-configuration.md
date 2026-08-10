@@ -46,6 +46,9 @@ This document captures the runtime and configuration updates added with the core
 ### Messaging and Cache
 
 - `KAFKA_BOOTSTRAP_SERVERS`
+- `ADMIN_EVENTS_TOPIC`
+- `ADMIN_DATABASE_URL`
+- `ADMIN_SERVICE_URL`
 - `PRODUCT_EVENTS_TOPIC`
 - `INTERACTION_EVENTS_TOPIC`
 - `ORDER_EVENTS_TOPIC`
@@ -62,6 +65,12 @@ This document captures the runtime and configuration updates added with the core
 - `DODO_WEBHOOK_SECRET`
 - `DODO_CHECKOUT_URL`
 - `DODO_TEST_MODE`
+
+### Local Gateway Management
+
+- Kong proxy: `http://localhost:8080`
+- Kong Admin API (loopback only): `http://localhost:8001`
+- Kong Manager (loopback only): `http://localhost:8002`
 
 ## Compose Behavior
 
@@ -101,3 +110,8 @@ GraphQL checks:
 
 - `http://localhost:8080/health`
 - `http://localhost:8080/playground`
+
+Gateway management checks:
+
+- `http://localhost:8001`
+- `http://localhost:8002`

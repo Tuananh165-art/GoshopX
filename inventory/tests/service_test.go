@@ -1,4 +1,4 @@
-﻿package tests
+package tests
 
 import (
 	"context"
@@ -67,6 +67,21 @@ func (m *MockRepository) ListLowStock(ctx context.Context, limit uint64) ([]*mod
 func (m *MockRepository) CleanupExpiredReservations(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockRepository) AdjustStock(ctx context.Context, productID string, delta, reorderLevel int32) (*models.Stock, error) {
+	args := m.Called(ctx, productID, delta, reorderLevel)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Stock), args.Error(1)
+}
+func (m *MockRepository) ListReservations(ctx context.Context, status string, skip, take uint64) ([]*models.StockReservation, error) {
+	args := m.Called(ctx, status, skip, take)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.StockReservation), args.Error(1)
 }
 
 type stubAsyncProducer struct {
@@ -194,4 +209,3 @@ func TestInventoryService_UpsertStockPropagatesRepositoryError(t *testing.T) {
 	assert.Nil(t, availability)
 	repo.AssertExpectations(t)
 }
-

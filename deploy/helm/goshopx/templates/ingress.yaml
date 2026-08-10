@@ -1,0 +1,25 @@
+{{- if and .Values.global.ingress.enabled .Values.global.ingress.host }}
+# Traefik is K3s's ingress controller only. It forwards every public request to
+# Kong; Kong retains the gateway policy and routes declared in its DB-less file.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: goshopx-kong
+spec:
+  ingressClassName: {{ .Values.global.ingress.className }}
+  {{- if .Values.global.ingress.tlsSecretName }}
+  tls:
+    - hosts: [{{ .Values.global.ingress.host | quote }}]
+      secretName: {{ .Values.global.ingress.tlsSecretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port: { number: 8000 }
+{{- end }}

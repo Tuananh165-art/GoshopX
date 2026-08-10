@@ -1,4 +1,4 @@
-﻿package client
+package client
 
 import (
 	"context"
@@ -38,6 +38,14 @@ func (client *Client) GetCart(ctx context.Context, accountID uint64) (*models.Ca
 	return decodeCart(response), nil
 }
 
+func (client *Client) AddCartItem(ctx context.Context, accountID uint64, productID string, quantity int32) (*models.Cart, error) {
+	response, err := client.service.AddCartItem(ctx, &pb.AddCartItemRequest{AccountId: accountID, ProductId: productID, Quantity: quantity})
+	if err != nil {
+		return nil, err
+	}
+	return decodeCart(response), nil
+}
+
 func (client *Client) UpsertCartItem(ctx context.Context, accountID uint64, productID string, quantity int32) (*models.Cart, error) {
 	response, err := client.service.UpsertCartItem(ctx, &pb.UpsertCartItemRequest{
 		AccountId: accountID,
@@ -66,6 +74,11 @@ func (client *Client) ClearCart(ctx context.Context, accountID uint64) error {
 	return err
 }
 
+func (client *Client) CompleteCheckout(ctx context.Context, accountID uint64) error {
+	_, err := client.service.CompleteCheckout(ctx, &pb.ClearCartRequest{AccountId: accountID})
+	return err
+}
+
 func (client *Client) PrepareCheckout(ctx context.Context, accountID uint64) (*models.Cart, error) {
 	response, err := client.service.PrepareCheckout(ctx, &pb.PrepareCheckoutRequest{AccountId: accountID})
 	if err != nil {
@@ -90,4 +103,3 @@ func decodeCart(cart *pb.Cart) *models.Cart {
 	}
 	return result
 }
-

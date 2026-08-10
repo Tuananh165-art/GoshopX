@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -22,6 +22,15 @@ type grpcServer struct {
 	service       Service
 	accountClient *account.Client
 	productClient *product.Client
+}
+
+func encodeOrder(order *models.Order) *pb.Order {
+	result := &pb.Order{Id: uint64(order.ID), AccountId: order.AccountID, TotalPrice: order.TotalPrice, Status: order.Status, PaymentStatus: order.PaymentStatus, Products: make([]*pb.ProductInfo, 0, len(order.Products))}
+	result.CreatedAt, _ = order.CreatedAt.MarshalBinary()
+	for _, product := range order.Products {
+		result.Products = append(result.Products, &pb.ProductInfo{Id: product.ID, Name: product.Name, Description: product.Description, Price: product.Price, Quantity: product.Quantity})
+	}
+	return result
 }
 
 func ListenGRPC(service Service, accountURL string, productURL string, port int) error {
@@ -152,10 +161,12 @@ func (server *grpcServer) GetOrdersForAccount(ctx context.Context, request *wrap
 	for _, order := range accountOrders {
 		// Encode order
 		encodedOrder := &pb.Order{
-			AccountId:  order.AccountID,
-			Id:         uint64(order.ID),
-			TotalPrice: order.TotalPrice,
-			Products:   []*pb.ProductInfo{},
+			AccountId:     order.AccountID,
+			Id:            uint64(order.ID),
+			TotalPrice:    order.TotalPrice,
+			Status:        order.Status,
+			PaymentStatus: order.PaymentStatus,
+			Products:      []*pb.ProductInfo{},
 		}
 		encodedOrder.CreatedAt, _ = order.CreatedAt.MarshalBinary()
 
@@ -196,3 +207,33 @@ func (server *grpcServer) UpdateOrderStatus(ctx context.Context, request *pb.Upd
 	return &emptypb.Empty{}, nil
 }
 
+func (server *grpcServer) ListOrders(ctx context.Context, request *pb.ListOrdersRequest) (*pb.ListOrdersResponse, error) {
+	orders, err := server.service.ListOrders(ctx, request.Status, request.PaymentStatus, request.AccountId, request.Skip, request.Take)
+	if err != nil {
+		return nil, err
+	}
+	response := &pb.ListOrdersResponse{Orders: make([]*pb.Order, 0, len(orders))}
+	for _, item := range orders {
+		response.Orders = append(response.Orders, encodeOrder(item))
+	}
+	return response, nil
+}
+
+func (server *grpcServer) GetOrder(ctx context.Context, request *wrapperspb.UInt64Value) (*pb.PostOrderResponse, error) {
+	order, err := server.service.GetOrder(ctx, request.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.PostOrderResponse{Order: encodeOrder(order)}, nil
+}
+
+func (server *grpcServer) CancelOrder(ctx context.Context, request *pb.CancelOrderRequest) (*pb.PostOrderResponse, error) {
+	if request.ActorRole != "operations_admin" && request.ActorRole != "platform_admin" && request.ActorRole != "support_admin" {
+		return nil, fmt.Errorf("unauthorized")
+	}
+	order, err := server.service.CancelOrder(ctx, request.OrderId, request.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.PostOrderResponse{Order: encodeOrder(order)}, nil
+}

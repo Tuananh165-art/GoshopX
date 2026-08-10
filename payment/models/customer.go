@@ -8,8 +8,6 @@ type Customer struct {
 	BillingEmail string    `json:"billing_email"`
 	BillingName  string    `json:"billing_name"`
 	CreatedAt    time.Time `json:"created_at"`
-
-	Transactions []Transaction `json:"transactions"`
 }
 
 type CustomerInput struct {

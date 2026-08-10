@@ -1,4 +1,4 @@
-﻿package tests
+package tests
 
 import (
 	"context"
@@ -30,6 +30,30 @@ func (m *MockRepository) GetOrdersForAccount(ctx context.Context, accountId uint
 func (m *MockRepository) UpdateOrderPaymentStatus(ctx context.Context, orderId uint64, status string) error {
 	args := m.Called(ctx, orderId, status)
 	return args.Error(0)
+}
+
+func (m *MockRepository) ListOrders(ctx context.Context, status, paymentStatus string, accountID, skip, take uint64) ([]*models.Order, error) {
+	args := m.Called(ctx, status, paymentStatus, accountID, skip, take)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Order), args.Error(1)
+}
+
+func (m *MockRepository) GetOrderByID(ctx context.Context, orderID uint64) (*models.Order, error) {
+	args := m.Called(ctx, orderID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Order), args.Error(1)
+}
+
+func (m *MockRepository) CancelOrder(ctx context.Context, orderID uint64, reason string) (*models.Order, error) {
+	args := m.Called(ctx, orderID, reason)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Order), args.Error(1)
 }
 
 func (m *MockRepository) Close() {}
@@ -167,6 +191,7 @@ func TestOrderService_UpdateOrderPaymentStatus(t *testing.T) {
 		status := "paid"
 
 		mockRepo.On("UpdateOrderPaymentStatus", ctx, orderID, status).Return(nil).Once()
+		mockRepo.On("GetOrderByID", mock.Anything, orderID).Return(&models.Order{ID: uint(orderID), AccountID: 7}, nil).Maybe()
 
 		err := service.UpdateOrderPaymentStatus(ctx, orderID, status)
 
@@ -187,4 +212,3 @@ func TestOrderService_UpdateOrderPaymentStatus(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
-

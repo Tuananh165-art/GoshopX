@@ -12,6 +12,14 @@ class Product(Base):
     description: Mapped[str] = mapped_column(String)
     price: Mapped[float] = mapped_column(Float)
     account_id: Mapped[int] = mapped_column(Integer)
+    category: Mapped[str] = mapped_column(String, default="")
+    brand: Mapped[str] = mapped_column(String, default="")
+    tags_json: Mapped[str] = mapped_column(String, default="[]")
+    thumbnail: Mapped[str] = mapped_column(String, default="")
+    images_json: Mapped[str] = mapped_column(String, default="[]")
+    publish_status: Mapped[str] = mapped_column(String, default="published")
+    moderation_status: Mapped[str] = mapped_column(String, default="approved")
+    stock: Mapped[int] = mapped_column(Integer, default=1)
 
     interactions: Mapped[list["Interaction"]] = relationship(
         "Interaction", back_populates="product", cascade="all, delete-orphan")

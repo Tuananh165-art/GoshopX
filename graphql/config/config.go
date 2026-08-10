@@ -11,8 +11,15 @@ var (
 	InventoryUrl    string
 	CartUrl         string
 	NotificationUrl string
+	AdminUrl        string
 	SecretKey       string
 	Issuer          string
+	MinIOEndpoint   string
+	MinIOAccessKey  string
+	MinIOSecretKey  string
+	MinIOBucket     string
+	MinIOUseSSL     string
+	MinIOPublicURL  string
 )
 
 func init() {
@@ -24,6 +31,13 @@ func init() {
 	InventoryUrl = os.Getenv("INVENTORY_SERVICE_URL")
 	CartUrl = os.Getenv("CART_SERVICE_URL")
 	NotificationUrl = os.Getenv("NOTIFICATION_SERVICE_URL")
+	AdminUrl = os.Getenv("ADMIN_SERVICE_URL")
 	SecretKey = os.Getenv("SECRET_KEY")
 	Issuer = os.Getenv("ISSUER")
+	MinIOEndpoint = os.Getenv("MINIO_ENDPOINT")
+	MinIOAccessKey = os.Getenv("MINIO_ACCESS_KEY")
+	MinIOSecretKey = os.Getenv("MINIO_SECRET_KEY")
+	MinIOBucket = os.Getenv("MINIO_BUCKET")
+	MinIOUseSSL = os.Getenv("MINIO_USE_SSL")
+	MinIOPublicURL = os.Getenv("MINIO_PUBLIC_URL")
 }

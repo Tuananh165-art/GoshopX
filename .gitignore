@@ -20,6 +20,7 @@ go.work.sum
 
 # env file
 .env
+scripts/ubuntu/goshopx-secrets.env
 .idea
 .gocache/
 .gomodcache/
@@ -64,6 +65,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Unit test / coverage reports
+node_modules/
 htmlcov/
 .tox/
 .nox/

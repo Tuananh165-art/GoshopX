@@ -1,0 +1,27 @@
+global:
+  # Replace in the bootstrap command or use the GHCR_OWNER repository variable.
+  imageRegistry: ghcr.io/replace-owner
+  runtimeSecretName: goshopx-runtime
+  ingress:
+    enabled: false
+    className: traefik
+    host: ""
+  kong:
+    # Keep proxy/Admin/Manager ClusterIP by default. Use Traefik ingress for the
+    # proxy; expose management UIs via port-forward until firewall allowlists
+    # and HTTPS/operator auth are in place.
+    proxyNodePort: { enabled: false, port: 30080 }
+    managementNodePorts: { enabled: false, admin: 30081, manager: 30082 }
+
+# This value is updated by .github/workflows/release-gitops.yml after an image
+# is published. Use a commit SHA only; never deploy mutable `latest` in GitOps.
+image:
+  tag: REPLACE_WITH_GIT_SHA
+
+services:
+  # Phase 0 keeps core commerce enabled. Phase 3 can enable every service only
+  # after Kafka, Milvus and recommender DB capacity have been measured.
+  admin: { enabled: false }
+  recommender-server: { enabled: false }
+  recommender-sync: { enabled: false }
+  recommender-train: { enabled: false }

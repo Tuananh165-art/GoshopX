@@ -1,10 +1,11 @@
-﻿package internal
+package internal
 
 import (
 	"context"
 	"time"
 
 	"github.com/Tuananh165art/GoshopX/notification/models"
+	"github.com/Tuananh165art/GoshopX/pkg/migrations"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -23,7 +24,9 @@ type postgresRepository struct {
 }
 
 func NewPostgresRepository(db *gorm.DB) (Repository, error) {
-	if err := db.AutoMigrate(&models.Notification{}); err != nil {
+	if err := migrations.Run(db, "notification", "001_initial", func(db *gorm.DB) error {
+		return db.AutoMigrate(&models.Notification{})
+	}); err != nil {
 		return nil, err
 	}
 
@@ -86,4 +89,3 @@ func (repository *postgresRepository) MarkAllRead(ctx context.Context, accountID
 		Updates(map[string]any{"is_read": true, "read_at": &now})
 	return result.RowsAffected, result.Error
 }
-

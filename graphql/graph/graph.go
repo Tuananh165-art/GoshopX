@@ -1,9 +1,10 @@
-﻿package graph
+package graph
 
 import (
 	"github.com/99designs/gqlgen/graphql"
 
 	account "github.com/Tuananh165art/GoshopX/account/client"
+	admin "github.com/Tuananh165art/GoshopX/admin/client"
 	cart "github.com/Tuananh165art/GoshopX/cart/client"
 	"github.com/Tuananh165art/GoshopX/graphql/generated"
 	inventory "github.com/Tuananh165art/GoshopX/inventory/client"
@@ -23,9 +24,11 @@ type Server struct {
 	inventoryClient    *inventory.Client
 	cartClient         *cart.Client
 	notificationClient *notification.Client
+	adminClient        *admin.Client
+	mediaStore         *mediaStore
 }
 
-func NewGraphQLServer(accountURL, productURL, orderURL, paymentURL, recommenderURL, inventoryURL, cartURL, notificationURL string) (*Server, error) {
+func NewGraphQLServer(accountURL, productURL, orderURL, paymentURL, recommenderURL, inventoryURL, cartURL, notificationURL, adminURL string) (*Server, error) {
 	accClient, err := account.NewClient(accountURL)
 	if err != nil {
 		return nil, err
@@ -93,6 +96,31 @@ func NewGraphQLServer(accountURL, productURL, orderURL, paymentURL, recommenderU
 		cartClient.Close()
 		return nil, err
 	}
+	adminClient, err := admin.NewClient(adminURL)
+	if err != nil {
+		notificationClient.Close()
+		cartClient.Close()
+		inventoryClient.Close()
+		recClient.Close()
+		paymentClient.Close()
+		ordClient.Close()
+		prodClient.Close()
+		accClient.Close()
+		return nil, err
+	}
+	store, err := newMediaStore()
+	if err != nil {
+		adminClient.Close()
+		notificationClient.Close()
+		cartClient.Close()
+		inventoryClient.Close()
+		recClient.Close()
+		paymentClient.Close()
+		ordClient.Close()
+		prodClient.Close()
+		accClient.Close()
+		return nil, err
+	}
 
 	return &Server{
 		accountClient:      accClient,
@@ -103,6 +131,8 @@ func NewGraphQLServer(accountURL, productURL, orderURL, paymentURL, recommenderU
 		inventoryClient:    inventoryClient,
 		cartClient:         cartClient,
 		notificationClient: notificationClient,
+		adminClient:        adminClient,
+		mediaStore:         store,
 	}, nil
 }
 
@@ -127,4 +157,3 @@ func (server *Server) Account() generated.AccountResolver {
 func (server *Server) Product() generated.ProductResolver {
 	return &productResolver{server: server}
 }
-

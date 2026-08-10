@@ -1,0 +1,125 @@
+_format_version: "3.0"
+_transform: true
+
+# DB-less configuration. Kong is the only externally published ingress for
+# application traffic; service names resolve on the private Compose network.
+upstreams:
+  - name: graphql-upstream
+    algorithm: round-robin
+    healthchecks:
+      active:
+        type: http
+        http_path: /health
+        healthy:
+          interval: 5
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 2
+          timeouts: 2
+      passive:
+        healthy:
+          successes: 2
+        unhealthy:
+          http_failures: 2
+          timeouts: 2
+    targets:
+      - target: graphql:8080
+        weight: 100
+  - name: payment-webhook-upstream
+    algorithm: round-robin
+    targets:
+      - target: payment:8081
+        weight: 100
+  - name: web-upstream
+    algorithm: round-robin
+    targets:
+      - target: web:80
+        weight: 100
+
+services:
+  - name: web-storefront
+    protocol: http
+    host: web-upstream
+    port: 80
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    retries: 2
+    routes:
+      - name: web-storefront
+        paths:
+          - /
+          - /healthz
+        methods:
+          - GET
+        strip_path: false
+        preserve_host: false
+
+  - name: graphql-public-api
+    protocol: http
+    host: graphql-upstream
+    port: 80
+    connect_timeout: 10000
+    read_timeout: 120000
+    write_timeout: 120000
+    retries: 1
+    routes:
+      - name: graphql
+        paths:
+          - /graphql
+        methods:
+          - POST
+        strip_path: false
+        preserve_host: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 300
+              policy: local
+              limit_by: ip
+              fault_tolerant: false
+          - name: correlation-id
+            config:
+              header_name: X-Request-ID
+              generator: uuid
+              echo_downstream: true
+      - name: graphql-browser-tools
+        paths:
+          - /playground
+          - /health
+        methods:
+          - GET
+        strip_path: false
+        preserve_host: false
+        plugins:
+          - name: correlation-id
+            config:
+              header_name: X-Request-ID
+              generator: uuid
+              echo_downstream: true
+
+  # This route deliberately bypasses GraphQL: VNPAY's server-to-server IPN
+  # cannot issue GraphQL operations. Payment owns checksum verification.
+  - name: payment-provider-webhook
+    protocol: http
+    host: payment-webhook-upstream
+    port: 80
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    retries: 0
+    routes:
+      - name: vnpay-payment-ipn
+        paths:
+          - /webhook/payment
+        methods:
+          - GET
+        strip_path: false
+        preserve_host: false
+        plugins:
+          - name: correlation-id
+            config:
+              header_name: X-Request-ID
+              generator: uuid
+              echo_downstream: true

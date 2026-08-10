@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"log"
@@ -22,6 +22,7 @@ func main() {
 		config.InventoryUrl,
 		config.CartUrl,
 		config.NotificationUrl,
+		config.AdminUrl,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -33,7 +34,7 @@ func main() {
 
 	engine := gin.Default()
 
-	engine.Use(middleware.GinContextToContextMiddleware())
+	engine.Use(middleware.GinContextToContextMiddleware(), middleware.CaptureClientIP())
 
 	engine.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -48,4 +49,3 @@ func main() {
 
 	log.Fatal(engine.Run(":8080"))
 }
-

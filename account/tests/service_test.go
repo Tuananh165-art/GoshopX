@@ -1,4 +1,4 @@
-﻿package tests
+package tests
 
 import (
 	"context"
@@ -36,6 +36,31 @@ func (m *MockRepository) GetAccountByID(ctx context.Context, id uint64) (*models
 func (m *MockRepository) ListAccounts(ctx context.Context, skip, take uint64) ([]*models.Account, error) {
 	args := m.Called(ctx, skip, take)
 	return args.Get(0).([]*models.Account), args.Error(1)
+}
+
+func (m *MockRepository) UpdateAccount(ctx context.Context, account *models.Account) error {
+	args := m.Called(ctx, account)
+	return args.Error(0)
+}
+
+func (m *MockRepository) UpdateGoogleIdentity(ctx context.Context, account *models.Account) error {
+	args := m.Called(ctx, account)
+	return args.Error(0)
+}
+
+func (m *MockRepository) SavePasswordReset(ctx context.Context, account *models.Account) error {
+	args := m.Called(ctx, account)
+	return args.Error(0)
+}
+
+func (m *MockRepository) UpdatePassword(ctx context.Context, account *models.Account) error {
+	args := m.Called(ctx, account)
+	return args.Error(0)
+}
+
+func (m *MockRepository) SaveAdminAuditEvent(ctx context.Context, event models.AdminAuditEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
 }
 
 func (m *MockRepository) Close() {
@@ -226,3 +251,35 @@ func TestAccountService_GetAccounts(t *testing.T) {
 	})
 }
 
+func TestAccountService_AdminPolicy(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockRepository)
+	service := internal.NewService(mockRepo)
+
+	target := &models.Account{ID: 2, Name: "Target", Role: models.RoleCustomer, Status: models.StatusActive}
+	mockRepo.On("GetAccountByID", ctx, uint64(2)).Return(target, nil).Once()
+	mockRepo.On("UpdateAccount", ctx, target).Return(nil).Once()
+	mockRepo.On("SaveAdminAuditEvent", ctx, mock.AnythingOfType("models.AdminAuditEvent")).Return(nil).Once()
+	updated, err := service.SetAccountRole(ctx, 1, 2, models.RolePlatformAdmin, models.RoleSeller, "req-1")
+	assert.NoError(t, err)
+	assert.Equal(t, models.RoleSeller, updated.Role)
+
+	_, err = service.SetAccountRole(ctx, 1, 2, models.RoleSupportAdmin, models.RoleOperationsAdmin, "req-2")
+	assert.Error(t, err)
+	_, err = service.SetAccountStatus(ctx, 2, 2, models.RolePlatformAdmin, models.StatusSuspended, "req-3")
+	assert.Error(t, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestAccountService_LoginSuspended(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockRepository)
+	service := internal.NewService(mockRepo)
+	hashedPassword, _ := crypt.HashPassword("password123")
+	account := &models.Account{ID: 1, Email: "suspended@example.com", Password: hashedPassword, Status: models.StatusSuspended}
+	mockRepo.On("GetAccountByEmail", ctx, account.Email).Return(account, nil).Once()
+
+	_, err := service.Login(ctx, account.Email, "password123")
+	assert.EqualError(t, err, "account suspended")
+	mockRepo.AssertExpectations(t)
+}

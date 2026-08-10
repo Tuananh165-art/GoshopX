@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -23,8 +23,10 @@ type InventoryClient interface {
 type Service interface {
 	GetCart(ctx context.Context, accountID uint64) (*models.Cart, error)
 	UpsertCartItem(ctx context.Context, accountID uint64, productID string, quantity int32) (*models.Cart, error)
+	AddCartItem(ctx context.Context, accountID uint64, productID string, quantity int32) (*models.Cart, error)
 	RemoveCartItem(ctx context.Context, accountID uint64, productID string) (*models.Cart, error)
 	ClearCart(ctx context.Context, accountID uint64) error
+	CompleteCheckout(ctx context.Context, accountID uint64) error
 	PrepareCheckout(ctx context.Context, accountID uint64) (*models.Cart, error)
 	GetProducer() sarama.AsyncProducer
 }
@@ -61,6 +63,14 @@ func (service *cartService) GetCart(ctx context.Context, accountID uint64) (*mod
 }
 
 func (service *cartService) UpsertCartItem(ctx context.Context, accountID uint64, productID string, quantity int32) (*models.Cart, error) {
+	return service.upsertCartItem(ctx, accountID, productID, quantity, false)
+}
+
+func (service *cartService) AddCartItem(ctx context.Context, accountID uint64, productID string, quantity int32) (*models.Cart, error) {
+	return service.upsertCartItem(ctx, accountID, productID, quantity, true)
+}
+
+func (service *cartService) upsertCartItem(ctx context.Context, accountID uint64, productID string, quantity int32, increment bool) (*models.Cart, error) {
 	if quantity <= 0 {
 		return nil, ErrInvalidCartQuantity
 	}
@@ -71,6 +81,9 @@ func (service *cartService) UpsertCartItem(ctx context.Context, accountID uint64
 	}
 
 	itemIndex := findItem(cart.Items, productID)
+	if increment && itemIndex >= 0 {
+		quantity += cart.Items[itemIndex].Quantity
+	}
 	reservationID := ""
 	if itemIndex >= 0 {
 		reservationID = cart.Items[itemIndex].ReservationID
@@ -183,6 +196,17 @@ func (service *cartService) ClearCart(ctx context.Context, accountID uint64) err
 	return nil
 }
 
+func (service *cartService) CompleteCheckout(ctx context.Context, accountID uint64) error {
+	if _, err := service.GetCart(ctx, accountID); err != nil {
+		return err
+	}
+	if err := service.repository.DeleteCart(ctx, accountID); err != nil {
+		return err
+	}
+	service.publishEvent(accountID, "cart.checkout_completed", models.EventData{CartSize: 0, Action: "completed"})
+	return nil
+}
+
 func (service *cartService) PrepareCheckout(ctx context.Context, accountID uint64) (*models.Cart, error) {
 	cart, err := service.GetCart(ctx, accountID)
 	if err != nil {
@@ -241,4 +265,3 @@ func reservationIDs(items []models.CartItem) []string {
 	}
 	return result
 }
-

@@ -1,9 +1,10 @@
-﻿package internal
+package internal
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -20,11 +21,25 @@ type Service interface {
 }
 
 type notificationService struct {
-	repository Repository
+	repository    Repository
+	emailSender   EmailSender
+	emailResolver AccountEmailResolver
 }
 
-func NewNotificationService(repository Repository) Service {
-	return &notificationService{repository: repository}
+type AccountEmailResolver interface {
+	ResolveEmail(ctx context.Context, accountID uint64) (string, error)
+}
+
+func NewNotificationService(repository Repository, emailSenders ...EmailSender) Service {
+	var emailSender EmailSender
+	if len(emailSenders) > 0 {
+		emailSender = emailSenders[0]
+	}
+	return &notificationService{repository: repository, emailSender: emailSender}
+}
+
+func NewNotificationServiceWithEmailResolver(repository Repository, emailSender EmailSender, emailResolver AccountEmailResolver) Service {
+	return &notificationService{repository: repository, emailSender: emailSender, emailResolver: emailResolver}
 }
 
 func (service *notificationService) ListNotifications(ctx context.Context, accountID uint64, skip, take uint64) ([]*models.Notification, error) {
@@ -57,6 +72,7 @@ func (service *notificationService) CreateFromEvent(ctx context.Context, event *
 	if err != nil {
 		return err
 	}
+	emailSubject, emailBody := notificationEmail(event.EventType, title, message, event.Data)
 
 	notification := &models.Notification{
 		AccountID:    event.AccountID,
@@ -68,17 +84,171 @@ func (service *notificationService) CreateFromEvent(ctx context.Context, event *
 		IsRead:       false,
 		CreatedAt:    time.Now().UTC(),
 	}
-	return service.repository.CreateNotification(ctx, notification)
+	if err := service.repository.CreateNotification(ctx, notification); err != nil {
+		return err
+	}
+	if service.emailSender != nil && shouldSendEmail(event) {
+		if recipient := event.RecipientEmail; recipient != "" {
+			if err := service.emailSender.Send(ctx, recipient, emailSubject, emailBody); err != nil {
+				log.Printf("notification email delivery failed for %s: %v", recipient, err)
+				return nil
+			}
+		} else if recipient := eventRecipient(event.Data); recipient != "" {
+			if err := service.emailSender.Send(ctx, recipient, emailSubject, emailBody); err != nil {
+				// Email delivery is best-effort; in-app notification is already durable.
+				log.Printf("notification email delivery failed for %s: %v", recipient, err)
+				return nil
+			}
+		} else if service.emailResolver != nil && event.AccountID != 0 {
+			if recipient, err := service.emailResolver.ResolveEmail(ctx, event.AccountID); err == nil && recipient != "" {
+				if err := service.emailSender.Send(ctx, recipient, emailSubject, emailBody); err != nil {
+					log.Printf("notification email delivery failed for %s: %v", recipient, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func eventRecipient(data any) string {
+	values, ok := data.(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, key := range []string{"recipient_email", "email"} {
+		if value, ok := values[key].(string); ok {
+			return value
+		}
+	}
+	return ""
+}
+
+func shouldSendEmail(event *sharedevents.Envelope) bool {
+	if event == nil {
+		return false
+	}
+	switch event.EventType {
+	case "payment.succeeded", "auth.password_reset_otp", "order.cod_created":
+		return true
+	case "order.payment_status_updated":
+		values, ok := event.Data.(map[string]any)
+		if !ok {
+			return false
+		}
+		status := strings.ToLower(stringValue(values["payment_status"]))
+		return status == "paid" || status == "succeeded" || status == "success" || status == "completed"
+	default:
+		return false
+	}
+}
+
+func notificationEmail(eventType, title, message string, data any) (string, string) {
+	values, ok := data.(map[string]any)
+	if !ok {
+		return title, message
+	}
+
+	orderID := numberText(values["order_id"])
+	emailTitle := title
+	if orderID != "" {
+		emailTitle = fmt.Sprintf("%s - Đơn hàng #%s", title, orderID)
+	}
+
+	currency := stringValue(values["currency"])
+	if currency == "" {
+		currency = "USD"
+	}
+	var body strings.Builder
+	body.WriteString(message)
+	if eventType == "auth.password_reset_otp" {
+		if otp := stringValue(values["otp"]); otp != "" {
+			body.WriteString("\n\nMã OTP đổi mật khẩu: ")
+			body.WriteString(otp)
+			body.WriteString("\nMã OTP chỉ dùng một lần và có thời hạn ngắn.")
+		}
+	}
+	if orderID != "" {
+		body.WriteString("\n\nĐơn hàng #")
+		body.WriteString(orderID)
+	}
+	if status := stringValue(values["status"]); status != "" {
+		body.WriteString("\nTrạng thái đơn hàng: ")
+		body.WriteString(status)
+	}
+	if status := stringValue(values["payment_status"]); status != "" {
+		body.WriteString("\nTrạng thái thanh toán: ")
+		body.WriteString(status)
+	}
+	if total := numberText(values["total_price"]); total != "" {
+		body.WriteString("\nTổng tiền: ")
+		body.WriteString(total)
+		body.WriteString(" ")
+		body.WriteString(currency)
+	}
+
+	if rawProducts, ok := values["products"].([]any); ok && len(rawProducts) > 0 {
+		body.WriteString("\n\nChi tiết sản phẩm:")
+		for index, rawProduct := range rawProducts {
+			product, ok := rawProduct.(map[string]any)
+			if !ok {
+				continue
+			}
+			body.WriteString(fmt.Sprintf("\n%d. %s", index+1, stringValue(product["name"])))
+			body.WriteString("\n   Mã sản phẩm: ")
+			body.WriteString(stringValue(product["id"]))
+			body.WriteString("\n   Mô tả: ")
+			body.WriteString(stringValue(product["description"]))
+			body.WriteString("\n   Đơn giá: ")
+			body.WriteString(numberText(product["price"]))
+			body.WriteString(" ")
+			body.WriteString(currency)
+			body.WriteString("\n   Số lượng: ")
+			body.WriteString(numberText(product["quantity"]))
+		}
+	}
+	return emailTitle, body.String()
+}
+
+func stringValue(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
+func numberText(value any) string {
+	switch number := value.(type) {
+	case float64:
+		return fmt.Sprintf("%.0f", number)
+	case float32:
+		return fmt.Sprintf("%.0f", number)
+	case int:
+		return fmt.Sprintf("%d", number)
+	case int64:
+		return fmt.Sprintf("%d", number)
+	case uint:
+		return fmt.Sprintf("%d", number)
+	case uint64:
+		return fmt.Sprintf("%d", number)
+	case string:
+		return number
+	default:
+		return ""
+	}
 }
 
 func notificationCopy(eventType string) (string, string) {
 	switch eventType {
+	case "auth.password_reset_otp":
+		return "Mã OTP đổi mật khẩu", "Bạn vừa yêu cầu đổi mật khẩu. Dùng mã OTP bên dưới để tiếp tục."
 	case "payment.succeeded":
 		return "Payment successful", "Your payment was completed successfully."
 	case "payment.failed":
 		return "Payment failed", "Your payment failed. Please try checkout again."
 	case "order.created":
 		return "Order created", "Your order has been created and is waiting for payment."
+	case "order.cod_created":
+		return "Đặt đơn COD thành công", "Đơn COD của bạn đã được tiếp nhận và đang chờ thu tiền."
 	case "order.payment_status_updated":
 		return "Order updated", "Your order payment status was updated."
 	case "inventory.released":
@@ -97,4 +267,3 @@ func notificationCopy(eventType string) (string, string) {
 		return "", ""
 	}
 }
-

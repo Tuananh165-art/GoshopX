@@ -1,0 +1,40 @@
+defaultRules:
+  create: true
+alertmanager:
+  enabled: false
+grafana:
+  adminPassword: CHANGE_ME_VIA_HELM_SET_OR_EXISTING_SECRET
+  persistence:
+    enabled: true
+    size: 2Gi
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki-gateway.logging.svc.cluster.local
+      isDefault: false
+prometheus:
+  prometheusSpec:
+    retention: 3d
+    retentionSize: 3GB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    resources:
+      requests: { cpu: 150m, memory: 512Mi }
+      limits: { cpu: 750m, memory: 1Gi }
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 5Gi
+prometheusOperator:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+kubeControllerManager: { enabled: false }
+kubeEtcd: { enabled: false }
+kubeScheduler: { enabled: false }

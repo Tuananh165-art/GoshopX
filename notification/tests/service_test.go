@@ -1,4 +1,4 @@
-﻿package tests
+package tests
 
 import (
 	"context"
@@ -13,6 +13,21 @@ import (
 
 type MockRepository struct {
 	mock.Mock
+}
+
+type mockEmailSender struct{ recipient, subject, body string }
+
+func (sender *mockEmailSender) Send(_ context.Context, recipient, subject, body string) error {
+	sender.recipient = recipient
+	sender.subject = subject
+	sender.body = body
+	return nil
+}
+
+type mockEmailResolver struct{}
+
+func (mockEmailResolver) ResolveEmail(context.Context, uint64) (string, error) {
+	return "customer@example.com", nil
 }
 
 func (m *MockRepository) Close() {}
@@ -60,6 +75,90 @@ func TestNotificationService_CreateFromEvent(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
+func TestNotificationService_SendsEmailUsingAccountResolver(t *testing.T) {
+	repo := new(MockRepository)
+	sender := &mockEmailSender{}
+	service := internal.NewNotificationServiceWithEmailResolver(repo, sender, mockEmailResolver{})
+	ctx := context.Background()
+	repo.On("CreateNotification", ctx, mock.AnythingOfType("*models.Notification")).Return(nil).Once()
+
+	err := service.CreateFromEvent(ctx, &sharedevents.Envelope{EventID: "event-email", EventType: "payment.succeeded", AccountID: 7})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "customer@example.com", sender.recipient)
+	repo.AssertExpectations(t)
+}
+
+func TestNotificationService_EmailContainsOrderDetails(t *testing.T) {
+	repo := new(MockRepository)
+	sender := &mockEmailSender{}
+	service := internal.NewNotificationServiceWithEmailResolver(repo, sender, mockEmailResolver{})
+	ctx := context.Background()
+	repo.On("CreateNotification", ctx, mock.AnythingOfType("*models.Notification")).Return(nil).Once()
+
+	err := service.CreateFromEvent(ctx, &sharedevents.Envelope{
+		EventID:   "event-order-details",
+		EventType: "payment.succeeded",
+		AccountID: 7,
+		Data: map[string]any{
+			"order_id":       float64(42),
+			"total_price":    float64(300000),
+			"currency":       "USD",
+			"status":         "pending",
+			"payment_status": "cod_pending",
+			"products": []any{map[string]any{
+				"id": "phone-1", "name": "Phone", "description": "Blue phone", "price": float64(300000), "quantity": float64(1),
+			}},
+		},
+	})
+
+	assert.NoError(t, err)
+	assert.Contains(t, sender.subject, "#42")
+	assert.Contains(t, sender.body, "Phone")
+	assert.Contains(t, sender.body, "Blue phone")
+	assert.Contains(t, sender.body, "300000 USD")
+	assert.Contains(t, sender.body, "Số lượng: 1")
+	assert.Contains(t, sender.body, "cod_pending")
+	repo.AssertExpectations(t)
+}
+
+func TestNotificationService_DoesNotEmailPendingOrder(t *testing.T) {
+	repo := new(MockRepository)
+	sender := &mockEmailSender{}
+	service := internal.NewNotificationServiceWithEmailResolver(repo, sender, mockEmailResolver{})
+	ctx := context.Background()
+	repo.On("CreateNotification", ctx, mock.AnythingOfType("*models.Notification")).Return(nil).Once()
+
+	err := service.CreateFromEvent(ctx, &sharedevents.Envelope{
+		EventID:   "event-pending",
+		EventType: "order.created",
+		AccountID: 7,
+		Data:      map[string]any{"order_id": float64(42), "payment_status": "cod_pending"},
+	})
+
+	assert.NoError(t, err)
+	assert.Empty(t, sender.recipient)
+	repo.AssertExpectations(t)
+}
+
+func TestNotificationService_EmailsCODConfirmation(t *testing.T) {
+	repo := new(MockRepository)
+	sender := &mockEmailSender{}
+	service := internal.NewNotificationServiceWithEmailResolver(repo, sender, mockEmailResolver{})
+	ctx := context.Background()
+	repo.On("CreateNotification", ctx, mock.AnythingOfType("*models.Notification")).Return(nil).Once()
+
+	err := service.CreateFromEvent(ctx, &sharedevents.Envelope{
+		EventID: "event-cod-created", EventType: "order.cod_created", AccountID: 7,
+		Data: map[string]any{"order_id": float64(43), "payment_status": "cod_pending"},
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "customer@example.com", sender.recipient)
+	assert.Contains(t, sender.body, "cod_pending")
+	repo.AssertExpectations(t)
+}
+
 func TestNotificationService_CountUnread(t *testing.T) {
 	repo := new(MockRepository)
 	service := internal.NewNotificationService(repo)
@@ -85,4 +184,3 @@ func TestNotificationService_MarkAllRead(t *testing.T) {
 	assert.NoError(t, err)
 	assert.EqualValues(t, 3, count)
 }
-

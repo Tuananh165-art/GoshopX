@@ -1,4 +1,4 @@
-﻿package tests
+package tests
 
 import (
 	"context"
@@ -214,3 +214,21 @@ func TestCartService_PropagatesInventoryError(t *testing.T) {
 	assert.Nil(t, cart)
 }
 
+func TestCartService_AddCartItemAccumulatesExistingQuantity(t *testing.T) {
+	ctx := context.Background()
+	repo := new(MockRepository)
+	inv := new(MockInventoryClient)
+	service := internal.NewCartService(repo, inv, newStubAsyncProducer())
+	existing := &models.Cart{AccountID: 1, Items: []models.CartItem{{ProductID: "product-1", Quantity: 2, ReservationID: "r1", ReservedUntil: time.Now().UTC().Add(15 * time.Minute)}}}
+	repo.On("GetCart", ctx, uint64(1)).Return(existing, nil).Once()
+	inv.On("ReserveStock", ctx, "r1", uint64(1), "product-1", int32(3), 15*time.Minute, "cart").Return(
+		&inventorymodels.StockReservation{ReservationID: "r1", ProductID: "product-1", Quantity: 3, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)},
+		&inventorymodels.Availability{ProductID: "product-1", AvailableQuantity: 7}, nil).Once()
+	repo.On("SaveCart", ctx, mock.AnythingOfType("*models.Cart"), 15*time.Minute).Return(nil).Once()
+
+	cart, err := service.AddCartItem(ctx, 1, "product-1", 1)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int32(3), cart.Items[0].Quantity)
+	repo.AssertExpectations(t)
+}

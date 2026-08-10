@@ -1,4 +1,4 @@
-﻿package tests
+package tests
 
 import (
 	"context"
@@ -22,6 +22,11 @@ func (m *MockRepository) PutProduct(ctx context.Context, p *models.Product) erro
 	return args.Error(0)
 }
 
+func (m *MockRepository) PutProductWithID(ctx context.Context, p *models.Product) error {
+	args := m.Called(ctx, p)
+	return args.Error(0)
+}
+
 func (m *MockRepository) GetProductById(ctx context.Context, id string) (*models.Product, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
@@ -32,6 +37,14 @@ func (m *MockRepository) GetProductById(ctx context.Context, id string) (*models
 
 func (m *MockRepository) ListProducts(ctx context.Context, skip, take uint64) ([]*models.Product, error) {
 	args := m.Called(ctx, skip, take)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Product), args.Error(1)
+}
+
+func (m *MockRepository) ListProductsByCategory(ctx context.Context, category string, skip, take uint64) ([]*models.Product, error) {
+	args := m.Called(ctx, category, skip, take)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -61,6 +74,24 @@ func (m *MockRepository) UpdateProduct(ctx context.Context, updatedProduct *mode
 
 func (m *MockRepository) DeleteProduct(ctx context.Context, productId string) error {
 	args := m.Called(ctx, productId)
+	return args.Error(0)
+}
+
+func (m *MockRepository) PutCategory(ctx context.Context, category *models.Category) error {
+	args := m.Called(ctx, category)
+	return args.Error(0)
+}
+
+func (m *MockRepository) ListCategories(ctx context.Context, activeOnly bool) ([]*models.Category, error) {
+	args := m.Called(ctx, activeOnly)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Category), args.Error(1)
+}
+
+func (m *MockRepository) DeleteCategory(ctx context.Context, categoryID string) error {
+	args := m.Called(ctx, categoryID)
 	return args.Error(0)
 }
 
@@ -105,6 +136,22 @@ func (p *stubAsyncProducer) AddOffsetsToTxn(map[string][]*sarama.PartitionOffset
 
 func (p *stubAsyncProducer) AddMessageToTxn(*sarama.ConsumerMessage, string, *string) error {
 	return nil
+}
+
+func TestProductService_AdminModerationRequiresCatalogRole(t *testing.T) {
+	service := internal.NewProductService(new(MockRepository), nil)
+	_, err := service.SetModeration(context.Background(), "product-1", "published", "approved", "", "seller")
+	assert.EqualError(t, err, "unauthorized")
+}
+
+func TestProductService_AdminModerationRejectsUnapprovedPublish(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := new(MockRepository)
+	mockRepo.On("GetProductById", ctx, "product-1").Return(&models.Product{ID: "product-1"}, nil)
+	service := internal.NewProductService(mockRepo, nil)
+	_, err := service.SetModeration(ctx, "product-1", "published", "pending", "", "operations_admin")
+	assert.EqualError(t, err, "published products must be approved")
+	mockRepo.AssertNotCalled(t, "UpdateProduct", mock.Anything, mock.Anything)
 }
 
 func TestProductService_PostProduct(t *testing.T) {
@@ -302,4 +349,3 @@ func TestProductService_DeleteProduct(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
-

@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -39,6 +39,14 @@ func (server *grpcServer) GetCart(ctx context.Context, request *pb.GetCartReques
 	return encodeCart(cart), nil
 }
 
+func (server *grpcServer) AddCartItem(ctx context.Context, request *pb.AddCartItemRequest) (*pb.Cart, error) {
+	cart, err := server.service.AddCartItem(ctx, request.AccountId, request.ProductId, request.Quantity)
+	if err != nil {
+		return nil, err
+	}
+	return encodeCart(cart), nil
+}
+
 func (server *grpcServer) UpsertCartItem(ctx context.Context, request *pb.UpsertCartItemRequest) (*pb.Cart, error) {
 	cart, err := server.service.UpsertCartItem(ctx, request.AccountId, request.ProductId, request.Quantity)
 	if err != nil {
@@ -68,6 +76,13 @@ func (server *grpcServer) PrepareCheckout(ctx context.Context, request *pb.Prepa
 		return nil, err
 	}
 	return encodeCart(cart), nil
+}
+
+func (server *grpcServer) CompleteCheckout(ctx context.Context, request *pb.ClearCartRequest) (*pb.BooleanResponse, error) {
+	if err := server.service.CompleteCheckout(ctx, request.AccountId); err != nil {
+		return nil, err
+	}
+	return &pb.BooleanResponse{Ok: true}, nil
 }
 
 func encodeCart(cart *models.Cart) *pb.Cart {
@@ -103,4 +118,3 @@ func decodeCart(cart *pb.Cart) *models.Cart {
 	}
 	return result
 }
-

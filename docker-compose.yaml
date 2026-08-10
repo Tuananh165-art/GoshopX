@@ -34,6 +34,8 @@ services:
   account_db:
     container_name: "account_db"
     image: postgres:14.0
+    ports:
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-Tuananh165-art}
       POSTGRES_USER: ${POSTGRES_USER:-Tuananh165-art}
@@ -51,9 +53,26 @@ services:
     volumes:
       - product_db_data:/usr/share/elasticsearch/data
 
+  kibana:
+    container_name: "kibana"
+    image: docker.elastic.co/kibana/kibana-oss:6.2.4
+    depends_on:
+      - product_db
+    environment:
+      ELASTICSEARCH_URL: http://product_db:9200
+      SERVER_NAME: goshopx-kibana
+      SERVER_HOST: 0.0.0.0
+    ports:
+      - "5601:5601"
+    volumes:
+      - kibana_data:/usr/share/kibana/data
+    restart: unless-stopped
+
   order_db:
     container_name: "order_db"
     image: postgres:14.0
+    ports:
+      - "127.0.0.1:5434:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-Tuananh165-art}
       POSTGRES_USER: ${POSTGRES_USER:-Tuananh165-art}
@@ -65,6 +84,8 @@ services:
   payment_db:
     container_name: "payment_db"
     image: postgres:14.0
+    ports:
+      - "127.0.0.1:5435:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-Tuananh165-art}
       POSTGRES_USER: ${POSTGRES_USER:-Tuananh165-art}
@@ -76,6 +97,8 @@ services:
   inventory_db:
     container_name: "inventory_db"
     image: postgres:14.0
+    ports:
+      - "127.0.0.1:5436:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-Tuananh165-art}
       POSTGRES_USER: ${POSTGRES_USER:-Tuananh165-art}
@@ -87,12 +110,27 @@ services:
   notification_db:
     container_name: "notification_db"
     image: postgres:14.0
+    ports:
+      - "127.0.0.1:5437:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-Tuananh165-art}
       POSTGRES_USER: ${POSTGRES_USER:-Tuananh165-art}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
     volumes:
       - notification_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  admin_db:
+    container_name: "admin_db"
+    image: postgres:14.0
+    ports:
+      - "127.0.0.1:5438:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-Tuananh165-art}
+      POSTGRES_USER: ${POSTGRES_USER:-Tuananh165-art}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+    volumes:
+      - admin_db_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   redis:
@@ -103,9 +141,90 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
+  minio:
+    container_name: "minio"
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-goshopx-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-change-me-minio-secret}
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  kafka-ui:
+    container_name: "kafka-ui"
+    image: provectuslabs/kafka-ui:v0.7.2
+    depends_on:
+      - kafka
+    ports:
+      - "8088:8080"
+    environment:
+      DYNAMIC_CONFIG_ENABLED: "false"
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_UI_CLUSTER_NAME:-goshopx-local}
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_CLUSTERS_0_READONLY: "true"
+    restart: unless-stopped
+
+  redisinsight:
+    container_name: "redisinsight"
+    image: redis/redisinsight:2.70.0
+    depends_on:
+      - redis
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/data
+    restart: unless-stopped
+
+  milvus-etcd:
+    container_name: "milvus-etcd"
+    image: quay.io/coreos/etcd:v3.5.18
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: 1000
+      ETCD_QUOTA_BACKEND_BYTES: 4294967296
+      ETCD_SNAPSHOT_COUNT: 50000
+    command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - milvus_etcd_data:/etcd
+    restart: unless-stopped
+
+  milvus-minio:
+    container_name: "milvus-minio"
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: minio server /minio_data --console-address ":9001"
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - milvus_minio_data:/minio_data
+    restart: unless-stopped
+
+  milvus:
+    container_name: "milvus"
+    image: milvusdb/milvus:v2.5.10
+    command: ["milvus", "run", "standalone"]
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    ports:
+      - "127.0.0.1:19530:19530"
+    volumes:
+      - milvus_data:/var/lib/milvus
+    restart: unless-stopped
+
   recommender_db:
     container_name: "recommender_db"
     image: postgres:15
+    ports:
+      - "127.0.0.1:5439:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-Tuananh165-art}
       POSTGRES_USER: ${POSTGRES_USER:-Tuananh165-art}
@@ -122,10 +241,15 @@ services:
       dockerfile: docker/services/account.dockerfile
     depends_on:
       - account_db
+      - kafka
     environment:
       DATABASE_URL: ${ACCOUNT_DATABASE_URL:-postgres://Tuananh165-art:123456@account_db/Tuananh165-art?sslmode=disable}
       SECRET_KEY: ${SECRET_KEY:-change-me-local-secret}
       ISSUER: ${ISSUER:-goshopx-local}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      ADMIN_EVENTS_TOPIC: ${ADMIN_EVENTS_TOPIC:-admin_events}
+      ACCOUNT_EVENTS_TOPIC: ${ACCOUNT_EVENTS_TOPIC:-account_events}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     restart: on-failure
 
   product:
@@ -140,6 +264,9 @@ services:
     environment:
       DATABASE_URL: ${PRODUCT_DATABASE_URL:-http://product_db:9200}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      DUMMYJSON_BASE_URL: ${DUMMYJSON_BASE_URL:-https://dummyjson.com}
+      DUMMYJSON_SEED_ENABLED: ${DUMMYJSON_SEED_ENABLED:-true}
+      DUMMYJSON_SEED_LIMIT: ${DUMMYJSON_SEED_LIMIT:-0}
     restart: on-failure
 
   order:
@@ -172,19 +299,21 @@ services:
       - order
       - inventory
       - cart
+      - product
       - kafka
     environment:
       DATABASE_URL: ${PAYMENT_DATABASE_URL:-postgres://Tuananh165-art:123456@payment_db/Tuananh165-art?sslmode=disable}
       ORDER_SERVICE_URL: ${ORDER_SERVICE_URL:-order:8080}
       INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL:-inventory:8080}
       CART_SERVICE_URL: ${CART_SERVICE_URL:-cart:8080}
+      PRODUCT_SERVICE_URL: ${PRODUCT_SERVICE_URL:-product:8080}
+      VND_PER_USD: ${VND_PER_USD:-25000}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       PRODUCT_EVENTS_TOPIC: ${PRODUCT_EVENTS_TOPIC:-product_events}
       PAYMENT_EVENTS_TOPIC: ${PAYMENT_EVENTS_TOPIC:-payment_events}
-      DODO_API_KEY: ${DODO_API_KEY:-}
-      DODO_WEBHOOK_SECRET: ${DODO_WEBHOOK_SECRET:-}
-      DODO_CHECKOUT_URL: ${DODO_CHECKOUT_URL:-}
-      DODO_TEST_MODE: ${DODO_TEST_MODE:-false}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
     restart: on-failure
 
   inventory:
@@ -197,9 +326,11 @@ services:
       - inventory_db
       - kafka
     environment:
-      DATABASE_URL: ${INVENTORY_DATABASE_URL:-postgres://Tuananh165-art:123456@inventory_db/Tuananh165-art?sslmode=disable}
+      DATABASE_URL: ${INVENTORY_DATABASE_URL:-postgres://Tuananh165-art:***@inventory_db/Tuananh165-art?sslmode=disable}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       INVENTORY_EVENTS_TOPIC: ${INVENTORY_EVENTS_TOPIC:-inventory_events}
+      DUMMYJSON_SEED_ENABLED: ${DUMMYJSON_SEED_ENABLED:-true}
+      DUMMYJSON_BASE_URL: ${DUMMYJSON_BASE_URL:-https://dummyjson.com}
     restart: on-failure
 
   cart:
@@ -213,7 +344,7 @@ services:
       - inventory
       - kafka
     environment:
-      REDIS_URL: ${REDIS_URL:-redis:6379}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL:-inventory:8080}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       CART_EVENTS_TOPIC: ${CART_EVENTS_TOPIC:-cart_events}
@@ -230,11 +361,39 @@ services:
       - kafka
     environment:
       DATABASE_URL: ${NOTIFICATION_DATABASE_URL:-postgres://Tuananh165-art:123456@notification_db/Tuananh165-art?sslmode=disable}
+      ACCOUNT_SERVICE_URL: ${ACCOUNT_SERVICE_URL:-account:8080}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       CART_EVENTS_TOPIC: ${CART_EVENTS_TOPIC:-cart_events}
       INVENTORY_EVENTS_TOPIC: ${INVENTORY_EVENTS_TOPIC:-inventory_events}
       ORDER_EVENTS_TOPIC: ${ORDER_EVENTS_TOPIC:-order_events}
       PAYMENT_EVENTS_TOPIC: ${PAYMENT_EVENTS_TOPIC:-payment_events}
+      GMAIL_SMTP_HOST: ${GMAIL_SMTP_HOST:-smtp.gmail.com}
+      GMAIL_SMTP_PORT: ${GMAIL_SMTP_PORT:-587}
+      GMAIL_USERNAME: ${GMAIL_USERNAME:-}
+      GMAIL_PASSWORD: ${GMAIL_PASSWORD:-}
+      GMAIL_FROM: ${GMAIL_FROM:-}
+    restart: on-failure
+
+  admin:
+    container_name: "admin"
+    image: "tuananh165/admin:latest"
+    build:
+      context: .
+      dockerfile: docker/services/admin.dockerfile
+    depends_on:
+      - admin_db
+      - redis
+      - kafka
+    environment:
+      DATABASE_URL: ${ADMIN_DATABASE_URL:-postgres://Tuananh165-art:123456@admin_db/Tuananh165-art?sslmode=disable}
+      REDIS_URL: ${REDIS_URL:-redis:6379}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      PRODUCT_EVENTS_TOPIC: ${PRODUCT_EVENTS_TOPIC:-product_events}
+      ORDER_EVENTS_TOPIC: ${ORDER_EVENTS_TOPIC:-order_events}
+      PAYMENT_EVENTS_TOPIC: ${PAYMENT_EVENTS_TOPIC:-payment_events}
+      INVENTORY_EVENTS_TOPIC: ${INVENTORY_EVENTS_TOPIC:-inventory_events}
+      ADMIN_EVENTS_TOPIC: ${ADMIN_EVENTS_TOPIC:-admin_events}
+      ACCOUNT_EVENTS_TOPIC: ${ACCOUNT_EVENTS_TOPIC:-account_events}
     restart: on-failure
 
   recommender-server:
@@ -247,8 +406,11 @@ services:
     depends_on:
       - recommender_db
       - kafka
+      - milvus
+    env_file:
+      - ./recommender/.env
     environment:
-      DATABASE_URL: ${RECOMMENDER_DATABASE_URL:-postgresql://Tuananh165-art:123456@recommender_db/Tuananh165-art?sslmode=disable}
+      DATABASE_URL: ${RECOMMENDER_DATABASE_URL:-postgresql://Tuananh165-art:***@recommender_db/Tuananh165-art?sslmode=disable}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       ARTIFACTS_LOCAL_PATH: ${ARTIFACTS_LOCAL_PATH:-/app/artifacts}
       GRPC_PORT: 8080
@@ -266,10 +428,13 @@ services:
     depends_on:
       - recommender_db
       - kafka
+      - milvus
+    env_file:
+      - ./recommender/.env
     environment:
-      DATABASE_URL: ${RECOMMENDER_DATABASE_URL:-postgresql://Tuananh165-art:123456@recommender_db/Tuananh165-art?sslmode=disable}
+      DATABASE_URL: ${RECOMMENDER_DATABASE_URL:-postgresql://Tuananh165-art:***@recommender_db/Tuananh165-art?sslmode=disable}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
-      PRODUCT_API: http://product:8080/products
+      PRODUCT_API: http://product:8081/products
       PRODUCT_EVENTS_TOPIC: ${PRODUCT_EVENTS_TOPIC:-product_events}
       INTERACTION_EVENTS_TOPIC: ${INTERACTION_EVENTS_TOPIC:-interaction_events}
     restart: on-failure
@@ -291,13 +456,10 @@ services:
     restart: on-failure
 
   graphql:
-    container_name: "graphql"
     image: "tuananh165/graphql:latest"
     build:
       context: .
       dockerfile: docker/services/graphql.dockerfile
-    ports:
-      - "8080:8080"
     depends_on:
       - account
       - product
@@ -306,6 +468,8 @@ services:
       - inventory
       - cart
       - notification
+      - admin
+      - minio
       - recommender-server
       - recommender-sync
     environment:
@@ -317,18 +481,71 @@ services:
       INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL:-inventory:8080}
       CART_SERVICE_URL: ${CART_SERVICE_URL:-cart:8080}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-notification:8080}
+      ADMIN_SERVICE_URL: ${ADMIN_SERVICE_URL:-admin:8080}
       SECRET_KEY: ${SECRET_KEY:-change-me-local-secret}
       ISSUER: ${ISSUER:-goshopx-local}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-goshopx-minio}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-change-me-minio-secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-product-media}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
     restart: on-failure
+
+  web:
+    image: "tuananh165/goshopx-web:latest"
+    build:
+      context: .
+      dockerfile: docker/services/web.dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    restart: unless-stopped
+
+  # Public ingress. Do not publish GraphQL or internal gRPC service ports;
+  # local clients keep using http://localhost:8080 through this proxy.
+  kong:
+    image: kong:3.9
+    depends_on:
+      - graphql
+      - payment
+      - web
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yaml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
+      KONG_ADMIN_GUI_URL: http://localhost:8002
+      KONG_ADMIN_GUI_API_URL: http://localhost:8001
+      # Compose can assign a new IP whenever an upstream container is recreated.
+      # Keep Kong's service-name DNS cache short so it follows the current container.
+      KONG_DNS_VALID_TTL: "1"
+      KONG_DNS_STALE_TTL: "0"
+      KONG_DNS_NOT_FOUND_TTL: "1"
+      KONG_LOG_LEVEL: notice
+    ports:
+      - "8080:8000"
+      - "127.0.0.1:8001:8001"
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - ./kong/kong.yaml:/usr/local/kong/declarative/kong.yaml:ro
+    restart: unless-stopped
 
 volumes:
   account_db_data:
   product_db_data:
+  kibana_data:
   order_db_data:
   payment_db_data:
   inventory_db_data:
   notification_db_data:
+  admin_db_data:
   recommender_db_data:
+  milvus_etcd_data:
+  milvus_minio_data:
+  milvus_data:
   recommender_artifacts:
   kafka-volume:
   redis_data:
+  redisinsight_data:
+  minio_data:

@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "./pb";
+
+message DashboardRequest {
+  int64 from_unix = 1;
+  int64 to_unix = 2;
+  uint64 top_products_limit = 3;
+}
+
+message ProductMetric {
+  string product_id = 1;
+  uint64 quantity = 2;
+  int64 gmv = 3;
+}
+
+message DashboardResponse {
+  int64 gmv = 1;
+  int64 revenue = 2;
+  uint64 order_count = 3;
+  double average_order_value = 4;
+  uint64 payment_attempts = 5;
+  uint64 successful_payments = 6;
+  double payment_success_rate = 7;
+  repeated ProductMetric top_products = 8;
+}
+
+message ListAuditEventsRequest {
+  uint64 actor_account_id = 1;
+  string action = 2;
+  int64 from_unix = 3;
+  int64 to_unix = 4;
+  uint64 skip = 5;
+  uint64 take = 6;
+}
+
+message AuditEvent {
+  string event_id = 1;
+  uint64 actor_account_id = 2;
+  uint64 target_account_id = 3;
+  string action = 4;
+  string outcome = 5;
+  string request_id = 6;
+  int64 occurred_at_unix = 7;
+}
+
+message ListAuditEventsResponse { repeated AuditEvent events = 1; }
+
+service AdminService {
+  rpc GetDashboard(DashboardRequest) returns (DashboardResponse) {}
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse) {}
+}

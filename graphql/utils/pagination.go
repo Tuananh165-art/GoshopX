@@ -1,4 +1,4 @@
-﻿package utils
+package utils
 
 import "github.com/Tuananh165art/GoshopX/graphql/generated"
 

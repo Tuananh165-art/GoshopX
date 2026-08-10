@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -73,7 +73,7 @@ func (ec *EventConsumer) handleProductCreated(event models.ProductEvent) {
 		*event.Data.ProductID, *event.Data.Name, *event.Data.Price)
 
 	ctx := context.Background()
-	err := ec.service.RegisterProduct(ctx, *event.Data.Name, int64(*event.Data.Price*100), "", *event.Data.ProductID)
+	err := ec.service.RegisterProduct(ctx, *event.Data.Name, priceInVND(*event.Data.Price), "", *event.Data.ProductID)
 	if err != nil {
 		log.Printf("Failed to register product with payment provider: %v", err)
 	}
@@ -87,7 +87,7 @@ func (ec *EventConsumer) handleProductUpdated(event models.ProductEvent) {
 
 	log.Printf("Payment service received product updated event: ID=%s", *event.Data.ProductID)
 	ctx := context.Background()
-	err := ec.service.UpdateProduct(ctx, *event.Data.ProductID, *event.Data.Name, int64(*event.Data.Price*100))
+	err := ec.service.UpdateProduct(ctx, *event.Data.ProductID, *event.Data.Name, priceInVND(*event.Data.Price))
 	if err != nil {
 		log.Printf("Failed to update product with payment provider: %v", err)
 	}
@@ -107,4 +107,3 @@ func (ec *EventConsumer) handleProductDeleted(event models.ProductEvent) {
 		log.Printf("Failed to delete product with payment provider: %v", err)
 	}
 }
-

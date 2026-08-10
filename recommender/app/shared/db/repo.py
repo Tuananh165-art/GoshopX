@@ -1,4 +1,5 @@
 import pandas as pd
+import json
 
 from recommendations.weights import PURCHASE_WEIGHT, VIEW_WEIGHT
 from shared.db.models import Interaction, Product
@@ -65,6 +66,14 @@ def create_product(session, product_data: dict) -> None:
             description=product_data["description"],
             price=product_data["price"],
             account_id=product_data["accountID"],
+            category=product_data.get("category", ""),
+            brand=product_data.get("brand", ""),
+            tags_json=json.dumps(product_data.get("tags", []), ensure_ascii=False),
+            thumbnail=product_data.get("thumbnail", ""),
+            images_json=json.dumps(product_data.get("images", []), ensure_ascii=False),
+            publish_status=product_data.get("publishStatus", "published"),
+            moderation_status=product_data.get("moderationStatus", "approved"),
+            stock=int(product_data.get("stock", 1) or 0),
         )
     )
 
@@ -75,6 +84,14 @@ def update_product(session, product_data: dict) -> None:
     product.description = product_data["description"]
     product.price = product_data["price"]
     product.account_id = product_data["accountID"]
+    product.category = product_data.get("category", product.category)
+    product.brand = product_data.get("brand", product.brand)
+    product.tags_json = json.dumps(product_data.get("tags", json.loads(product.tags_json or "[]")), ensure_ascii=False)
+    product.thumbnail = product_data.get("thumbnail", product.thumbnail)
+    product.images_json = json.dumps(product_data.get("images", json.loads(product.images_json or "[]")), ensure_ascii=False)
+    product.publish_status = product_data.get("publishStatus", product.publish_status)
+    product.moderation_status = product_data.get("moderationStatus", product.moderation_status)
+    product.stock = int(product_data.get("stock", product.stock) or 0)
 
 
 def create_or_update_product(session, product_data: dict) -> None:

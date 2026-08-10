@@ -3,18 +3,101 @@
 package generated
 
 import (
+	"fmt"
+	"io"
+	"strconv"
 	"time"
+
+	"github.com/99designs/gqlgen/graphql"
 )
 
 type Account struct {
-	ID     int      `json:"id"`
-	Name   string   `json:"name"`
-	Email  string   `json:"email"`
-	Orders []*Order `json:"orders"`
+	ID              int           `json:"id"`
+	Name            string        `json:"name"`
+	Email           string        `json:"email"`
+	AvatarURL       string        `json:"avatarUrl"`
+	Phone           string        `json:"phone"`
+	ShippingAddress string        `json:"shippingAddress"`
+	RoleID          int           `json:"roleId"`
+	Role            AccountRole   `json:"role"`
+	Status          AccountStatus `json:"status"`
+	Orders          []*Order      `json:"orders"`
+}
+
+type AddProductMediaInput struct {
+	ProductID string `json:"productId"`
+	URL       string `json:"url"`
+	AltText   string `json:"altText"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+type AdminAuditEvent struct {
+	EventID         string    `json:"eventId"`
+	ActorAccountID  int       `json:"actorAccountId"`
+	TargetAccountID int       `json:"targetAccountId"`
+	Action          string    `json:"action"`
+	Outcome         string    `json:"outcome"`
+	RequestID       string    `json:"requestId"`
+	OccurredAt      time.Time `json:"occurredAt"`
+}
+
+type AdminDashboard struct {
+	Gmv                float64               `json:"gmv"`
+	Revenue            float64               `json:"revenue"`
+	OrderCount         int                   `json:"orderCount"`
+	AverageOrderValue  float64               `json:"averageOrderValue"`
+	PaymentAttempts    int                   `json:"paymentAttempts"`
+	SuccessfulPayments int                   `json:"successfulPayments"`
+	PaymentSuccessRate float64               `json:"paymentSuccessRate"`
+	TopProducts        []*AdminProductMetric `json:"topProducts"`
+}
+
+type AdminOrder struct {
+	ID            int               `json:"id"`
+	AccountID     int               `json:"accountId"`
+	TotalPrice    float64           `json:"totalPrice"`
+	Status        string            `json:"status"`
+	PaymentStatus string            `json:"paymentStatus"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	Products      []*OrderedProduct `json:"products"`
+}
+
+type AdminOrderFilter struct {
+	Status        *string          `json:"status,omitempty"`
+	PaymentStatus *string          `json:"paymentStatus,omitempty"`
+	AccountID     *int             `json:"accountId,omitempty"`
+	Pagination    *PaginationInput `json:"pagination,omitempty"`
+}
+
+type AdminProductInput struct {
+	ID               *string  `json:"id,omitempty"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	Price            float64  `json:"price"`
+	CategoryID       string   `json:"categoryId"`
+	Brand            string   `json:"brand"`
+	Sku              string   `json:"sku"`
+	Thumbnail        string   `json:"thumbnail"`
+	Images           []string `json:"images"`
+	Tags             []string `json:"tags"`
+	PublishStatus    *string  `json:"publishStatus,omitempty"`
+	ModerationStatus *string  `json:"moderationStatus,omitempty"`
+	ModerationReason *string  `json:"moderationReason,omitempty"`
+}
+
+type AdminProductMetric struct {
+	ProductID string  `json:"productId"`
+	Quantity  int     `json:"quantity"`
+	Gmv       float64 `json:"gmv"`
 }
 
 type AuthResponse struct {
 	Token string `json:"token"`
+}
+
+type CODCheckoutResponse struct {
+	OrderID int    `json:"orderId"`
+	Status  string `json:"status"`
 }
 
 type Cart struct {
@@ -28,6 +111,14 @@ type CartItem struct {
 	Quantity      int       `json:"quantity"`
 	ReservationID string    `json:"reservationId"`
 	ReservedUntil time.Time `json:"reservedUntil"`
+}
+
+type Category struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	IsActive    bool   `json:"isActive"`
 }
 
 type CheckoutInput struct {
@@ -44,6 +135,13 @@ type CheckoutProductInput struct {
 	Quantity int    `json:"quantity"`
 }
 
+type CreateCategoryInput struct {
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Description string `json:"description"`
+	IsActive    bool   `json:"isActive"`
+}
+
 type CreateProductInput struct {
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
@@ -54,6 +152,17 @@ type CustomerPortalSessionInput struct {
 	AccountID int    `json:"accountId"`
 	Email     string `json:"email"`
 	Name      string `json:"name"`
+}
+
+type GoogleLoginInput struct {
+	Credential string `json:"credential"`
+}
+
+type InventoryAdjustmentInput struct {
+	ProductID    string `json:"productId"`
+	Delta        int    `json:"delta"`
+	ReorderLevel int    `json:"reorderLevel"`
+	Reason       string `json:"reason"`
 }
 
 type InventoryAvailability struct {
@@ -68,6 +177,13 @@ type InventoryAvailability struct {
 type LoginInput struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type ModerateProductInput struct {
+	ProductID        string `json:"productId"`
+	PublishStatus    string `json:"publishStatus"`
+	ModerationStatus string `json:"moderationStatus"`
+	ModerationReason string `json:"moderationReason"`
 }
 
 type Mutation struct {
@@ -113,26 +229,147 @@ type PaginationInput struct {
 	Take int `json:"take"`
 }
 
+type PaymentTransaction struct {
+	OrderID      int    `json:"orderId"`
+	UserID       int    `json:"userId"`
+	PaymentID    string `json:"paymentId"`
+	TotalPrice   int    `json:"totalPrice"`
+	SettledPrice int    `json:"settledPrice"`
+	Currency     string `json:"currency"`
+	Status       string `json:"status"`
+}
+
 type Product struct {
-	ID           string                 `json:"id"`
-	Name         string                 `json:"name"`
-	Description  string                 `json:"description"`
-	Price        float64                `json:"price"`
-	AccountID    int                    `json:"accountId"`
-	Availability *InventoryAvailability `json:"availability,omitempty"`
+	ID                   string                 `json:"id"`
+	Name                 string                 `json:"name"`
+	Description          string                 `json:"description"`
+	Price                float64                `json:"price"`
+	AccountID            int                    `json:"accountId"`
+	Availability         *InventoryAvailability `json:"availability,omitempty"`
+	CategoryID           string                 `json:"categoryId"`
+	PublishStatus        string                 `json:"publishStatus"`
+	ModerationStatus     string                 `json:"moderationStatus"`
+	ModerationReason     string                 `json:"moderationReason"`
+	Media                []*ProductMedia        `json:"media"`
+	DiscountPercentage   float64                `json:"discountPercentage"`
+	Rating               float64                `json:"rating"`
+	Stock                int                    `json:"stock"`
+	Tags                 []string               `json:"tags"`
+	Brand                string                 `json:"brand"`
+	Sku                  string                 `json:"sku"`
+	Weight               float64                `json:"weight"`
+	Dimensions           *ProductDimensions     `json:"dimensions"`
+	WarrantyInformation  string                 `json:"warrantyInformation"`
+	ShippingInformation  string                 `json:"shippingInformation"`
+	AvailabilityStatus   string                 `json:"availabilityStatus"`
+	Reviews              []*ProductReview       `json:"reviews"`
+	ReturnPolicy         string                 `json:"returnPolicy"`
+	MinimumOrderQuantity int                    `json:"minimumOrderQuantity"`
+	Meta                 *ProductMeta           `json:"meta"`
+	Thumbnail            string                 `json:"thumbnail"`
+	Images               []string               `json:"images"`
+}
+
+type ProductDimensions struct {
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+	Depth  float64 `json:"depth"`
+}
+
+type ProductMedia struct {
+	ID        string `json:"id"`
+	URL       string `json:"url"`
+	AltText   string `json:"altText"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+type ProductMeta struct {
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+	Barcode   string `json:"barcode"`
+	QRCode    string `json:"qrCode"`
+}
+
+type ProductReview struct {
+	Rating        int    `json:"rating"`
+	Comment       string `json:"comment"`
+	Date          string `json:"date"`
+	ReviewerName  string `json:"reviewerName"`
+	ReviewerEmail string `json:"reviewerEmail"`
+}
+
+type ProfileInput struct {
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	AvatarURL       string `json:"avatarUrl"`
+	Phone           string `json:"phone"`
+	ShippingAddress string `json:"shippingAddress"`
 }
 
 type Query struct {
+}
+
+type RecommendationChatInput struct {
+	Text             string          `json:"text"`
+	ImageURL         *string         `json:"imageUrl,omitempty"`
+	Image            *graphql.Upload `json:"image,omitempty"`
+	SessionID        *string         `json:"sessionId,omitempty"`
+	ViewedProductIds []string        `json:"viewedProductIds,omitempty"`
+	Limit            *int            `json:"limit,omitempty"`
+}
+
+type RecommendationChatProduct struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Price          float64  `json:"price"`
+	Currency       string   `json:"currency"`
+	Thumbnail      string   `json:"thumbnail"`
+	Images         []string `json:"images"`
+	Rating         float64  `json:"rating"`
+	Stock          int      `json:"stock"`
+	RetrievalScore float64  `json:"retrievalScore"`
+	MatchedReasons []string `json:"matchedReasons"`
+}
+
+type RecommendationChatResponse struct {
+	Answer          string                       `json:"answer"`
+	Products        []*RecommendationChatProduct `json:"products"`
+	NextSuggestions []string                     `json:"nextSuggestions"`
+	Warnings        []string                     `json:"warnings"`
+	RequestID       string                       `json:"requestId"`
 }
 
 type RedirectResponse struct {
 	URL string `json:"url"`
 }
 
+type RefundInput struct {
+	PaymentID      string `json:"paymentId"`
+	Reason         string `json:"reason"`
+	IdempotencyKey string `json:"idempotencyKey"`
+}
+
+type RefundResult struct {
+	ProviderRefundID string `json:"providerRefundId"`
+	Status           string `json:"status"`
+	Amount           int    `json:"amount"`
+}
+
 type RegisterInput struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type StockReservation struct {
+	ReservationID string    `json:"reservationId"`
+	AccountID     int       `json:"accountId"`
+	ProductID     string    `json:"productId"`
+	Quantity      int       `json:"quantity"`
+	Status        string    `json:"status"`
+	Source        string    `json:"source"`
+	ExpiresAt     time.Time `json:"expiresAt"`
 }
 
 type UpdateProductInput struct {
@@ -146,4 +383,94 @@ type UpsertProductStockInput struct {
 	ProductID    string `json:"productId"`
 	Quantity     int    `json:"quantity"`
 	ReorderLevel int    `json:"reorderLevel"`
+}
+
+type AccountRole string
+
+const (
+	AccountRoleCustomer        AccountRole = "CUSTOMER"
+	AccountRoleAdmin           AccountRole = "ADMIN"
+	AccountRoleSeller          AccountRole = "SELLER"
+	AccountRoleSupportAdmin    AccountRole = "SUPPORT_ADMIN"
+	AccountRoleOperationsAdmin AccountRole = "OPERATIONS_ADMIN"
+	AccountRolePlatformAdmin   AccountRole = "PLATFORM_ADMIN"
+)
+
+var AllAccountRole = []AccountRole{
+	AccountRoleCustomer,
+	AccountRoleAdmin,
+	AccountRoleSeller,
+	AccountRoleSupportAdmin,
+	AccountRoleOperationsAdmin,
+	AccountRolePlatformAdmin,
+}
+
+func (e AccountRole) IsValid() bool {
+	switch e {
+	case AccountRoleCustomer, AccountRoleAdmin, AccountRoleSeller, AccountRoleSupportAdmin, AccountRoleOperationsAdmin, AccountRolePlatformAdmin:
+		return true
+	}
+	return false
+}
+
+func (e AccountRole) String() string {
+	return string(e)
+}
+
+func (e *AccountRole) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AccountRole(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AccountRole", str)
+	}
+	return nil
+}
+
+func (e AccountRole) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type AccountStatus string
+
+const (
+	AccountStatusActive    AccountStatus = "ACTIVE"
+	AccountStatusSuspended AccountStatus = "SUSPENDED"
+)
+
+var AllAccountStatus = []AccountStatus{
+	AccountStatusActive,
+	AccountStatusSuspended,
+}
+
+func (e AccountStatus) IsValid() bool {
+	switch e {
+	case AccountStatusActive, AccountStatusSuspended:
+		return true
+	}
+	return false
+}
+
+func (e AccountStatus) String() string {
+	return string(e)
+}
+
+func (e *AccountStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AccountStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AccountStatus", str)
+	}
+	return nil
+}
+
+func (e AccountStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
 }

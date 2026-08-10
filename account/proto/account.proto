@@ -9,6 +9,12 @@ message Account {
   uint64 id = 1;
   string name = 2;
   string email = 3;
+  string role = 4;
+  string status = 5;
+  string avatar_url = 6;
+  string phone = 7;
+  int32 role_id = 9;
+  string shipping_address = 8;
 }
 
 message LoginRequest {
@@ -16,11 +22,18 @@ message LoginRequest {
   string password = 2;
 }
 
+message GoogleLoginRequest {
+  string credential = 1;
+}
+
 message RegisterRequest {
   string name = 1;
   string email = 2;
   string password = 3;
 }
+
+message ForgotPasswordRequest { string email = 1; }
+message ResetPasswordRequest { string email = 1; string otp = 2; string new_password = 3; }
 
 message AccountResponse {
   Account account = 1;
@@ -35,14 +48,51 @@ message GetAccountsResponse {
   repeated Account accounts = 1;
 }
 
+message UpdateProfileRequest {
+  uint64 account_id = 1;
+  string name = 2;
+  string email = 3;
+  string avatar_url = 4;
+  string phone = 5;
+  string shipping_address = 6;
+}
+
+message SetAccountStatusRequest {
+  uint64 actor_id = 1;
+  uint64 target_id = 2;
+  string actor_role = 3;
+  string status = 4;
+  string request_id = 5;
+}
+
+message SetAccountRoleRequest {
+  uint64 actor_id = 1;
+  uint64 target_id = 2;
+  string actor_role = 3;
+  string role = 4;
+  string request_id = 5;
+}
+
 service AccountService {
   rpc Register (RegisterRequest) returns (google.protobuf.StringValue){
   }
+  rpc ForgotPassword (ForgotPasswordRequest) returns (google.protobuf.BoolValue){
+  }
+  rpc ResetPassword (ResetPasswordRequest) returns (google.protobuf.BoolValue){
+  }
   rpc Login (LoginRequest) returns (google.protobuf.StringValue){
+  }
+  rpc LoginWithGoogle (GoogleLoginRequest) returns (google.protobuf.StringValue){
   }
   rpc GetAccount (google.protobuf.UInt64Value) returns (AccountResponse){
   }
   rpc GetAccounts (GetAccountsRequest) returns (GetAccountsResponse){
+  }
+  rpc UpdateProfile (UpdateProfileRequest) returns (AccountResponse){
+  }
+  rpc SetAccountStatus (SetAccountStatusRequest) returns (AccountResponse){
+  }
+  rpc SetAccountRole (SetAccountRoleRequest) returns (AccountResponse){
   }
 }
 

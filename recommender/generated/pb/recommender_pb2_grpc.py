@@ -3,9 +3,9 @@
 import grpc
 import warnings
 
-import generated.pb.recommender_pb2 as recommender__pb2
+from . import recommender_pb2 as recommender__pb2
 
-GRPC_GENERATED_VERSION = '1.71.0'
+GRPC_GENERATED_VERSION = '1.67.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -44,6 +44,11 @@ class RecommenderServiceStub(object):
                 request_serializer=recommender__pb2.RecommendationRequestOnViews.SerializeToString,
                 response_deserializer=recommender__pb2.RecommendationResponse.FromString,
                 _registered_method=True)
+        self.ChatRecommend = channel.unary_unary(
+                '/pb.RecommenderService/ChatRecommend',
+                request_serializer=recommender__pb2.ChatRecommendationRequest.SerializeToString,
+                response_deserializer=recommender__pb2.ChatRecommendationResponse.FromString,
+                _registered_method=True)
 
 
 class RecommenderServiceServicer(object):
@@ -61,6 +66,12 @@ class RecommenderServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ChatRecommend(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RecommenderServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +84,11 @@ def add_RecommenderServiceServicer_to_server(servicer, server):
                     servicer.GetRecommendationsBasedOnViewed,
                     request_deserializer=recommender__pb2.RecommendationRequestOnViews.FromString,
                     response_serializer=recommender__pb2.RecommendationResponse.SerializeToString,
+            ),
+            'ChatRecommend': grpc.unary_unary_rpc_method_handler(
+                    servicer.ChatRecommend,
+                    request_deserializer=recommender__pb2.ChatRecommendationRequest.FromString,
+                    response_serializer=recommender__pb2.ChatRecommendationResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +145,33 @@ class RecommenderService(object):
             '/pb.RecommenderService/GetRecommendationsBasedOnViewed',
             recommender__pb2.RecommendationRequestOnViews.SerializeToString,
             recommender__pb2.RecommendationResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ChatRecommend(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/ChatRecommend',
+            recommender__pb2.ChatRecommendationRequest.SerializeToString,
+            recommender__pb2.ChatRecommendationResponse.FromString,
             options,
             channel_credentials,
             insecure,

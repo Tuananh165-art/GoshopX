@@ -1,0 +1,96 @@
+{{- range $name, $service := .Values.services }}
+{{- if $service.enabled }}
+{{- $ctx := dict "root" $ "service" $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "goshopx.fullname" $ctx }}
+  labels:
+    {{- include "goshopx.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "goshopx.labels" $ctx | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.global.imageRegistry }}/goshopx-{{ $name }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          {{- with $service.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: grpc
+              containerPort: {{ $service.port }}
+          {{- range $extra := $service.extraPorts }}
+            - name: {{ $extra.name }}
+              containerPort: {{ $extra.port }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "goshopx.name" $ }}-config
+          {{- if $service.secretKeys }}
+          env:
+          {{- range $envName, $secretKey := $service.secretKeys }}
+            - name: {{ $envName }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.runtimeSecretName }}
+                  key: {{ $secretKey }}
+          {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml $service.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          livenessProbe:
+            tcpSocket: { port: grpc }
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket: { port: grpc }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "goshopx.fullname" $ctx }}
+  labels:
+    {{- include "goshopx.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $name }}
+  ports:
+    - name: grpc
+      port: {{ $service.port }}
+      targetPort: grpc
+{{- range $extra := $service.extraPorts }}
+    - name: {{ $extra.name }}
+      port: {{ $extra.port }}
+      targetPort: {{ $extra.name }}
+{{- end }}
+{{- end }}
+{{- end }}

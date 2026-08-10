@@ -1,4 +1,4 @@
-name: CI/CD Test Pipeline
+name: CI quality gates
 
 on:
   push:
@@ -20,11 +20,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23.4"
+          go-version: "1.24.x"
           cache: true
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Verify Go formatting
+        run: test -z "$(gofmt -l $(find . -name '*.go' -not -path './.gocache/*' -not -path './.gomodcache/*'))"
 
       - name: Run unit tests
         env:
@@ -32,3 +35,42 @@ jobs:
         run: |
           packages=$(go list ./... | grep -v '/tests/e2e$')
           go test -race -count=1 $packages
+
+  helm-render:
+    name: Helm render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: |
+          helm lint deploy/helm/goshopx -f deploy/helm/goshopx/values-lab.yaml
+          helm template goshopx deploy/helm/goshopx -f deploy/helm/goshopx/values-lab.yaml > /tmp/goshopx.yaml
+
+  security:
+    name: Secret and configuration scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@v3.88.5
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-config.sarif

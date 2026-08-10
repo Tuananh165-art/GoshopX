@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1600" viewBox="0 0 2400 1600">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6Z" fill="#94a3b8"/></marker>
+    <marker id="orangeArrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6Z" fill="#fb923c"/></marker>
+    <style>
+      .title{font:700 30px monospace;fill:#f8fafc}.subtitle{font:15px monospace;fill:#94a3b8}.label{font:700 16px monospace;fill:#f8fafc;text-anchor:middle}.small{font:13px monospace;fill:#cbd5e1;text-anchor:middle}.tiny{font:12px monospace;fill:#94a3b8;text-anchor:middle}.boundary{fill:rgba(15,23,42,.48);stroke:#475569;stroke-width:1.5;stroke-dasharray:8 5}.edge{stroke:#94a3b8;stroke-width:2;fill:none;marker-end:url(#arrow)}.grpc{stroke:#34d399;stroke-width:2;fill:none;marker-end:url(#arrow)}.event{stroke:#fb923c;stroke-width:2;fill:none;marker-end:url(#orangeArrow)}.external{fill:rgba(30,41,59,.8);stroke:#94a3b8;stroke-width:2}.gateway{fill:rgba(136,19,55,.42);stroke:#fb7185;stroke-width:2.5}.frontend{fill:rgba(8,51,68,.55);stroke:#22d3ee;stroke-width:2}.backend{fill:rgba(6,78,59,.5);stroke:#34d399;stroke-width:2}.store{fill:rgba(76,29,149,.5);stroke:#a78bfa;stroke-width:2}.bus{fill:rgba(251,146,60,.25);stroke:#fb923c;stroke-width:2}.cloud{fill:rgba(120,53,15,.35);stroke:#fbbf24;stroke-width:2}
+    </style>
+  </defs>
+  <rect width="2400" height="1600" fill="#020617"/><rect width="2400" height="1600" fill="url(#grid)"/>
+  <text x="70" y="70" class="title">GoshopX — Kong Edge Gateway Architecture</text>
+  <text x="70" y="103" class="subtitle">Public client contract stays GraphQL • gRPC is private synchronous communication • Kafka carries business facts</text>
+
+  <rect x="45" y="145" width="2310" height="1330" rx="20" class="boundary"/>
+  <text x="70" y="175" class="subtitle" fill="#fbbf24">Docker Compose private network — only Kong proxy port 8080 is published to the host</text>
+
+  <!-- connections first -->
+  <path d="M250 375 H350" class="edge"/><text x="300" y="355" class="tiny">HTTPS :8080</text>
+  <path d="M620 375 H750" class="edge"/><text x="685" y="355" class="tiny">POST /graphql</text>
+  <path d="M250 550 H350" class="edge"/><text x="300" y="530" class="tiny">VNPAY signed IPN</text>
+  <path d="M620 550 H1460" class="edge"/><text x="1030" y="530" class="tiny">GET /webhook/payment (IPN)</text>
+
+  <!-- graphql to services gRPC -->
+  <path d="M990 375 H1080 V270 H1170" class="grpc"/><path d="M990 375 H1170" class="grpc"/><path d="M990 375 H1080 V480 H1170" class="grpc"/>
+  <path d="M990 375 H1080 V690 H1170" class="grpc"/><path d="M990 375 H1080 V900 H1170" class="grpc"/><path d="M990 375 H1080 V1110 H1170" class="grpc"/>
+  <path d="M990 375 H1080 V1320 H1170" class="grpc"/><path d="M990 375 H1080 V1430 H1710" class="grpc"/>
+  <text x="1090" y="350" class="tiny" fill="#34d399">private gRPC :8080</text>
+
+  <!-- service to stores -->
+  <path d="M1410 270 H1500" class="edge"/><path d="M1410 375 H1500" class="edge"/><path d="M1410 480 H1500" class="edge"/>
+  <path d="M1410 690 H1500" class="edge"/><path d="M1410 900 H1500" class="edge"/><path d="M1410 1110 H1500" class="edge"/><path d="M1410 1320 H1500" class="edge"/>
+  <path d="M990 375 H1710 V210 H1810" class="edge"/><text x="1410" y="200" class="tiny">admin media upload</text>
+  <path d="M1950 1430 H2050" class="edge"/>
+
+  <!-- Kafka business fact flows -->
+  <path d="M1290 410 V570 H1820" class="event"/><path d="M1290 515 V570" class="event"/><path d="M1290 725 V570" class="event"/><path d="M1290 935 V570" class="event"/><path d="M1290 1145 V570" class="event"/><path d="M1290 1355 V570" class="event"/>
+  <path d="M1820 570 H1410 V1110" class="event"/><path d="M1820 570 H1710 V1320" class="event"/><path d="M1820 570 H1710 V1430" class="event"/>
+  <text x="1630" y="550" class="tiny" fill="#fb923c">versioned business facts</text>
+
+  <!-- components -->
+  <rect x="80" y="320" width="170" height="110" rx="12" class="external"/><text x="165" y="365" class="label">Browser / Mobile</text><text x="165" y="392" class="small">Public client</text>
+  <rect x="80" y="495" width="170" height="110" rx="12" class="external"/><text x="165" y="540" class="label">VNPAY Sandbox</text><text x="165" y="567" class="small">External provider</text>
+
+  <rect x="350" y="290" width="270" height="340" rx="16" fill="rgba(136,19,55,.12)" stroke="#fb7185" stroke-width="2" stroke-dasharray="6 5"/>
+  <text x="370" y="320" class="subtitle" fill="#fb7185">PUBLIC EDGE</text>
+  <rect x="375" y="345" width="220" height="100" rx="12" class="gateway"/><text x="485" y="384" class="label">Kong OSS</text><text x="485" y="411" class="small">reverse proxy • TLS*</text><text x="485" y="432" class="tiny">rate limit • request ID • LB</text>
+  <rect x="375" y="490" width="220" height="105" rx="12" class="gateway"/><text x="485" y="530" class="label">Kong routes</text><text x="485" y="555" class="tiny">/graphql • /playground • /health</text><text x="485" y="576" class="tiny">/webhook/payment</text>
+
+  <rect x="750" y="315" width="240" height="120" rx="12" class="frontend"/><text x="870" y="360" class="label">GraphQL</text><text x="870" y="387" class="small">public schema &amp; orchestration</text><text x="870" y="410" class="tiny">JWT / role context</text>
+
+  <!-- services -->
+  <rect x="1170" y="220" width="240" height="100" rx="10" class="backend"/><text x="1290" y="260" class="label">Account</text><text x="1290" y="286" class="small">identity / JWT / RBAC</text>
+  <rect x="1170" y="325" width="240" height="100" rx="10" class="backend"/><text x="1290" y="365" class="label">Product</text><text x="1290" y="391" class="small">catalog / search owner</text>
+  <rect x="1170" y="430" width="240" height="100" rx="10" class="backend"/><text x="1290" y="470" class="label">Order</text><text x="1290" y="496" class="small">checkout order owner</text>
+  <rect x="1170" y="640" width="240" height="100" rx="10" class="backend"/><text x="1290" y="680" class="label">Payment</text><text x="1290" y="706" class="small">transactions / VNPAY IPN</text>
+  <rect x="1170" y="850" width="240" height="100" rx="10" class="backend"/><text x="1290" y="890" class="label">Inventory</text><text x="1290" y="916" class="small">stock / reservations</text>
+  <rect x="1170" y="1060" width="240" height="100" rx="10" class="backend"/><text x="1290" y="1100" class="label">Cart</text><text x="1290" y="1126" class="small">active cart / Redis</text>
+  <rect x="1170" y="1270" width="240" height="100" rx="10" class="backend"/><text x="1290" y="1310" class="label">Notification</text><text x="1290" y="1336" class="small">in-app notification feed</text>
+  <rect x="1710" y="1380" width="240" height="100" rx="10" class="backend"/><text x="1830" y="1420" class="label">Admin</text><text x="1830" y="1446" class="small">audit / reporting read model</text>
+
+  <!-- datastore -->
+  <rect x="1500" y="220" width="230" height="100" rx="10" class="store"/><text x="1615" y="260" class="label">Account DB</text><text x="1615" y="286" class="small">PostgreSQL</text>
+  <rect x="1500" y="325" width="230" height="100" rx="10" class="store"/><text x="1615" y="365" class="label">Product DB</text><text x="1615" y="391" class="small">Elasticsearch</text>
+  <rect x="1500" y="430" width="230" height="100" rx="10" class="store"/><text x="1615" y="470" class="label">Order DB</text><text x="1615" y="496" class="small">PostgreSQL</text>
+  <rect x="1500" y="640" width="230" height="100" rx="10" class="store"/><text x="1615" y="680" class="label">Payment DB</text><text x="1615" y="706" class="small">PostgreSQL</text>
+  <rect x="1500" y="850" width="230" height="100" rx="10" class="store"/><text x="1615" y="890" class="label">Inventory DB</text><text x="1615" y="916" class="small">PostgreSQL</text>
+  <rect x="1500" y="1060" width="230" height="100" rx="10" class="store"/><text x="1615" y="1100" class="label">Redis</text><text x="1615" y="1126" class="small">cart state / cache</text>
+  <rect x="1500" y="1270" width="230" height="100" rx="10" class="store"/><text x="1615" y="1310" class="label">Notification DB</text><text x="1615" y="1336" class="small">PostgreSQL</text>
+  <rect x="2050" y="1380" width="230" height="100" rx="10" class="store"/><text x="2165" y="1420" class="label">Admin DB</text><text x="2165" y="1446" class="small">PostgreSQL read model</text>
+  <rect x="1810" y="160" width="230" height="100" rx="10" class="cloud"/><text x="1925" y="200" class="label">MinIO</text><text x="1925" y="226" class="small">product media objects</text>
+
+  <rect x="1820" y="515" width="260" height="110" rx="12" class="bus"/><text x="1950" y="555" class="label">Kafka</text><text x="1950" y="582" class="small">product / order / payment / inventory</text><text x="1950" y="603" class="tiny">cart / interaction / admin events</text>
+  <rect x="1710" y="1270" width="240" height="100" rx="10" class="backend"/><text x="1830" y="1310" class="label">Recommender</text><text x="1830" y="1336" class="small">Python gRPC server</text>
+  <rect x="2050" y="1270" width="230" height="100" rx="10" class="store"/><text x="2165" y="1310" class="label">Recommender DB</text><text x="2165" y="1336" class="small">PostgreSQL + artifacts</text>
+
+  <!-- Legend -->
+  <rect x="70" y="1510" width="2200" height="55" rx="10" fill="#0f172a" stroke="#334155"/>
+  <line x1="100" y1="1537" x2="145" y2="1537" class="edge"/><text x="230" y="1542" class="small">HTTP / reverse proxy</text>
+  <line x1="465" y1="1537" x2="510" y2="1537" class="grpc"/><text x="580" y="1542" class="small">private gRPC</text>
+  <line x1="760" y1="1537" x2="805" y2="1537" class="event"/><text x="900" y="1542" class="small">Kafka business event</text>
+  <text x="1300" y="1542" class="small">* TLS terminates at Kong in deployed environments; local Compose uses HTTP.</text>
+</svg>

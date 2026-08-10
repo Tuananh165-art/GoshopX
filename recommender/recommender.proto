@@ -27,7 +27,40 @@ message RecommendationResponse {
   repeated ProductReplica recommended_products = 1;
 }
 
+message ChatRecommendationRequest {
+  string text = 1;
+  string image_url = 2;
+  string user_id = 3;
+  string session_id = 4;
+  repeated string viewed_product_ids = 5;
+  uint32 limit = 6;
+  string request_id = 7;
+}
+
+message ChatProduct {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  string currency = 5;
+  string thumbnail = 6;
+  repeated string images = 7;
+  double rating = 8;
+  int64 stock = 9;
+  double retrieval_score = 10;
+  repeated string matched_reasons = 11;
+}
+
+message ChatRecommendationResponse {
+  string answer = 1;
+  repeated ChatProduct products = 2;
+  repeated string next_suggestions = 3;
+  repeated string warnings = 4;
+  string request_id = 5;
+}
+
 service RecommenderService {
   rpc GetRecommendations (RecommendationRequestForUserId) returns (RecommendationResponse);
   rpc GetRecommendationsBasedOnViewed (RecommendationRequestOnViews) returns (RecommendationResponse);
+  rpc ChatRecommend (ChatRecommendationRequest) returns (ChatRecommendationResponse);
 }

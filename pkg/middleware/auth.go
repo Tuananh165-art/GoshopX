@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"context"
@@ -7,6 +7,13 @@ import (
 	"github.com/Tuananh165art/GoshopX/pkg/contextkeys"
 	"github.com/gin-gonic/gin"
 )
+
+func CaptureClientIP() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), contextkeys.ClientIPKey, c.ClientIP()))
+		c.Next()
+	}
+}
 
 func AuthorizeJWT() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -27,6 +34,7 @@ func AuthorizeJWT() gin.HandlerFunc {
 		if claims, ok := token.Claims.(*auth.JWTCustomClaims); ok && token.Valid {
 			c.Set("userID", claims.UserID)
 			ctxWithVal := context.WithValue(c.Request.Context(), contextkeys.UserIDKey, claims.UserID)
+			ctxWithVal = context.WithValue(ctxWithVal, contextkeys.RoleKey, claims.Role)
 
 			c.Request = c.Request.WithContext(ctxWithVal)
 		} else {
@@ -36,4 +44,3 @@ func AuthorizeJWT() gin.HandlerFunc {
 		c.Next()
 	}
 }
-

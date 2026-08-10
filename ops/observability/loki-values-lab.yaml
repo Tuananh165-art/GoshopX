@@ -1,0 +1,29 @@
+deploymentMode: SingleBinary
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  limits_config:
+    retention_period: 72h
+    ingestion_rate_mb: 2
+    ingestion_burst_size_mb: 4
+singleBinary:
+  replicas: 1
+  resources:
+    requests: { cpu: 75m, memory: 192Mi }
+    limits: { cpu: 300m, memory: 384Mi }
+  persistence:
+    enabled: true
+    size: 5Gi
+gateway:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 100m, memory: 64Mi }
+chunksCache: { enabled: false }
+resultsCache: { enabled: false }
+backend: { replicas: 0 }
+read: { replicas: 0 }
+write: { replicas: 0 }
+test: { enabled: false }

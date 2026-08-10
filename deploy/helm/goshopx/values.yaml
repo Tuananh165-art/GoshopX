@@ -1,0 +1,140 @@
+global:
+  imageRegistry: ghcr.io/replace-owner
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  runtimeSecretName: goshopx-runtime
+  ingress:
+    enabled: false
+    className: traefik
+    host: ""
+    tlsSecretName: ""
+  kong:
+    image: kong:3.9
+    proxyNodePort:
+      enabled: false
+      port: 30080
+    managementNodePorts:
+      enabled: false
+      admin: 30081
+      manager: 30082
+    managerURL: ""
+    managerAPIURL: ""
+    resources: { requests: { cpu: 75m, memory: 128Mi }, limits: { cpu: 500m, memory: 384Mi } }
+  networkPolicy:
+    enabled: false
+
+infrastructure:
+  enabled: false
+  dashboards:
+    nodePort: false
+    kibana: 30601
+    kafkaUI: 30602
+    minioConsole: 30603
+    redisInsight: 30604
+  storageClass: local-path
+
+image:
+  tag: latest
+
+# Each image is expected at $global.imageRegistry/goshopx-<name>:$image.tag.
+# Only GraphQL is public; all other ports are internal gRPC endpoints.
+services:
+  graphql:
+    enabled: true
+    port: 8080
+    public: true
+    secretKeys: { SECRET_KEY: SECRET_KEY, MINIO_ACCESS_KEY: MINIO_ACCESS_KEY, MINIO_SECRET_KEY: MINIO_SECRET_KEY }
+    resources: { requests: { cpu: 75m, memory: 128Mi }, limits: { cpu: 500m, memory: 384Mi } }
+  account:
+    enabled: true
+    port: 8080
+    secretKeys: { DATABASE_URL: ACCOUNT_DATABASE_URL, SECRET_KEY: SECRET_KEY }
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
+  product:
+    enabled: true
+    port: 8080
+    extraPorts: [{ name: sync-http, port: 8081 }]
+    secretKeys: { DATABASE_URL: PRODUCT_DATABASE_URL }
+    resources: { requests: { cpu: 75m, memory: 96Mi }, limits: { cpu: 500m, memory: 256Mi } }
+  order:
+    enabled: true
+    port: 8080
+    secretKeys: { DATABASE_URL: ORDER_DATABASE_URL }
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
+  payment:
+    enabled: true
+    port: 8080
+    extraPorts: [{ name: webhook, port: 8081 }]
+    secretKeys: { DATABASE_URL: PAYMENT_DATABASE_URL, VNPAY_TMN_CODE: VNPAY_TMN_CODE, VNPAY_HASH_SECRET: VNPAY_HASH_SECRET }
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
+  inventory:
+    enabled: true
+    port: 8080
+    secretKeys: { DATABASE_URL: INVENTORY_DATABASE_URL }
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
+  cart:
+    enabled: true
+    port: 8080
+    secretKeys: {}
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
+  notification:
+    enabled: true
+    port: 8080
+    secretKeys: { DATABASE_URL: NOTIFICATION_DATABASE_URL, GMAIL_USERNAME: GMAIL_USERNAME, GMAIL_PASSWORD: GMAIL_PASSWORD, GMAIL_FROM: GMAIL_FROM }
+    resources: { requests: { cpu: 30m, memory: 48Mi }, limits: { cpu: 200m, memory: 128Mi } }
+  admin:
+    enabled: false
+    port: 8080
+    secretKeys: { DATABASE_URL: ADMIN_DATABASE_URL }
+    resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
+  recommender-server:
+    enabled: false
+    port: 8080
+    command: [python, main.py, server]
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY }
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 750m, memory: 768Mi } }
+  recommender-sync:
+    enabled: false
+    port: 8080
+    command: [python, main.py, consumer]
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY }
+    resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } }
+  recommender-train:
+    enabled: false
+    port: 8080
+    command: [sh, -c, "while true; do python main.py train; sleep 43200; done"]
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL }
+    resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } }
+  web:
+    enabled: true
+    port: 80
+    secretKeys: {}
+    resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 150m, memory: 96Mi } }
+
+# Put non-secret endpoints and feature flags here. Sensitive values must be
+# added to the existing runtime Secret, never committed to values files.
+config:
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  ACCOUNT_SERVICE_URL: account:8080
+  PRODUCT_SERVICE_URL: product:8080
+  ORDER_SERVICE_URL: order:8080
+  PAYMENT_SERVICE_URL: payment:8080
+  INVENTORY_SERVICE_URL: inventory:8080
+  CART_SERVICE_URL: cart:8080
+  NOTIFICATION_SERVICE_URL: notification:8080
+  ADMIN_SERVICE_URL: admin:8080
+  RECOMMENDER_SERVICE_URL: recommender-server:8080
+  REDIS_URL: redis:6379
+  MINIO_ENDPOINT: minio:9000
+  MINIO_BUCKET: product-media
+  MINIO_USE_SSL: "false"
+  MINIO_PUBLIC_URL: ""
+  DUMMYJSON_SEED_ENABLED: "false"
+  PRODUCT_EVENTS_TOPIC: product_events
+  INTERACTION_EVENTS_TOPIC: interaction_events
+  ORDER_EVENTS_TOPIC: order_events
+  PAYMENT_EVENTS_TOPIC: payment_events
+  INVENTORY_EVENTS_TOPIC: inventory_events
+  CART_EVENTS_TOPIC: cart_events
+  ADMIN_EVENTS_TOPIC: admin_events
+  ACCOUNT_EVENTS_TOPIC: account_events

@@ -1,0 +1,29 @@
+global:
+  name: consul
+  datacenter: lab-k3s
+  tls:
+    enabled: false
+server:
+  replicas: 1
+  bootstrapExpect: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  storage: 2Gi
+ui:
+  enabled: true
+  service:
+    type: ClusterIP
+client:
+  enabled: false
+syncCatalog:
+  enabled: true
+  toConsul: true
+  toK8S: false
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 150m, memory: 128Mi }
+connectInject:
+  enabled: false
+controller:
+  enabled: false

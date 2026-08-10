@@ -1,0 +1,78 @@
+name: Build, scan and promote GitOps image
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'deploy/helm/goshopx/values-lab.yaml'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { service: account, dockerfile: account }
+          - { service: product, dockerfile: product }
+          - { service: order, dockerfile: order }
+          - { service: payment, dockerfile: payment }
+          - { service: inventory, dockerfile: inventory }
+          - { service: cart, dockerfile: cart }
+          - { service: notification, dockerfile: notification }
+          - { service: admin, dockerfile: admin }
+          - { service: graphql, dockerfile: graphql }
+          - { service: web, dockerfile: web }
+          - { service: recommender-server, dockerfile: recommender }
+          - { service: recommender-sync, dockerfile: recommender }
+          - { service: recommender-train, dockerfile: recommender }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/${{ matrix.dockerfile }}.dockerfile
+          push: true
+          tags: ghcr.io/${{ vars.GHCR_OWNER }}/goshopx-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ vars.GHCR_OWNER }}/goshopx-${{ matrix.service }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  promote:
+    needs: build-scan-push
+    runs-on: ubuntu-latest
+    environment: lab
+    steps:
+      - uses: actions/checkout@v4
+      - name: Promote immutable image tag in Git
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          sed -i "s/^  tag: .*/  tag: ${SHA}/" deploy/helm/goshopx/values-lab.yaml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add deploy/helm/goshopx/values-lab.yaml
+          git commit -m "chore(gitops): promote ${SHA}" || exit 0
+          git push

@@ -1,4 +1,4 @@
-﻿package client
+package client
 
 import (
 	"context"
@@ -93,6 +93,25 @@ func (client *Client) ListLowStock(ctx context.Context, limit uint64) ([]*models
 	return stocks, nil
 }
 
+func (client *Client) AdjustStock(ctx context.Context, productID string, delta, reorderLevel int32, reason string) (*models.Stock, *models.Availability, error) {
+	response, err := client.service.AdjustStock(ctx, &pb.AdjustStockRequest{ProductId: productID, Delta: delta, ReorderLevel: reorderLevel, Reason: reason})
+	if err != nil {
+		return nil, nil, err
+	}
+	return decodeStock(response.Stock), decodeAvailability(response.Availability), nil
+}
+func (client *Client) ListReservations(ctx context.Context, status string, skip, take uint64) ([]*models.StockReservation, error) {
+	response, err := client.service.ListReservations(ctx, &pb.ListReservationsRequest{Status: status, Skip: skip, Take: take})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*models.StockReservation, 0, len(response.Reservations))
+	for _, item := range response.Reservations {
+		items = append(items, decodeReservation(item))
+	}
+	return items, nil
+}
+
 func decodeStock(stock *pb.Stock) *models.Stock {
 	if stock == nil {
 		return nil
@@ -132,4 +151,3 @@ func decodeReservation(reservation *pb.Reservation) *models.StockReservation {
 		ExpiresAt:     time.Unix(reservation.ExpiresAtUnix, 0).UTC(),
 	}
 }
-

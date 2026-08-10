@@ -27,6 +27,12 @@ message UpsertCartItemRequest {
   int32 quantity = 3;
 }
 
+message AddCartItemRequest {
+  uint64 account_id = 1;
+  string product_id = 2;
+  int32 quantity = 3;
+}
+
 message RemoveCartItemRequest {
   uint64 account_id = 1;
   string product_id = 2;
@@ -47,7 +53,9 @@ message BooleanResponse {
 service CartService {
   rpc GetCart(GetCartRequest) returns (Cart) {}
   rpc UpsertCartItem(UpsertCartItemRequest) returns (Cart) {}
+  rpc AddCartItem(AddCartItemRequest) returns (Cart) {}
   rpc RemoveCartItem(RemoveCartItemRequest) returns (Cart) {}
   rpc ClearCart(ClearCartRequest) returns (BooleanResponse) {}
   rpc PrepareCheckout(PrepareCheckoutRequest) returns (Cart) {}
+  rpc CompleteCheckout(ClearCartRequest) returns (BooleanResponse) {}
 }

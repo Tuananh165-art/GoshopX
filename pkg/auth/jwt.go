@@ -1,4 +1,4 @@
-﻿package auth
+package auth
 
 import (
 	"errors"
@@ -11,12 +11,18 @@ import (
 
 type JWTCustomClaims struct {
 	UserID uint64 `json:"user_id"`
+	Role   string `json:"role,omitempty"`
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID uint64) (string, error) {
+func GenerateToken(userID uint64, roles ...string) (string, error) {
+	role := ""
+	if len(roles) > 0 {
+		role = roles[0]
+	}
 	claims := &JWTCustomClaims{
 		UserID: userID,
+		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -52,4 +58,3 @@ func ValidateToken(encodedToken string) (*jwt.Token, error) {
 
 	return nil, errors.New("invalid token claims")
 }
-

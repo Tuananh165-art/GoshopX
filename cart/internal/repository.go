@@ -1,10 +1,11 @@
-﻿package internal
+package internal
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Tuananh165art/GoshopX/cart/models"
@@ -24,6 +25,9 @@ type redisRepository struct {
 }
 
 func NewRedisRepository(redisURL string) (Repository, error) {
+	if !strings.Contains(redisURL, "://") {
+		redisURL = "redis://" + redisURL
+	}
 	options, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, err
@@ -62,4 +66,3 @@ func (repository *redisRepository) SaveCart(ctx context.Context, cart *models.Ca
 func (repository *redisRepository) DeleteCart(ctx context.Context, accountID uint64) error {
 	return repository.client.Del(ctx, cartKey(accountID)).Err()
 }
-

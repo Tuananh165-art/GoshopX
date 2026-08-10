@@ -1,7 +1,9 @@
-﻿package internal
+package internal
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -16,6 +18,9 @@ type Service interface {
 	PostOrder(ctx context.Context, accountID uint64, totalPrice float64, products []*models.OrderedProduct) (*models.Order, error)
 	GetOrdersForAccount(ctx context.Context, accountID uint64) ([]*models.Order, error)
 	UpdateOrderPaymentStatus(ctx context.Context, orderId uint64, status string) error
+	ListOrders(ctx context.Context, status, paymentStatus string, accountID, skip, take uint64) ([]*models.Order, error)
+	GetOrder(ctx context.Context, orderID uint64) (*models.Order, error)
+	CancelOrder(ctx context.Context, orderID uint64, reason string) (*models.Order, error)
 	GetProducer() sarama.AsyncProducer
 }
 
@@ -34,10 +39,12 @@ func (service orderService) GetProducer() sarama.AsyncProducer {
 
 func (service orderService) PostOrder(ctx context.Context, accountID uint64, totalPrice float64, products []*models.OrderedProduct) (*models.Order, error) {
 	order := models.Order{
-		AccountID:  accountID,
-		TotalPrice: totalPrice,
-		Products:   products,
-		CreatedAt:  time.Now().UTC(),
+		AccountID:     accountID,
+		TotalPrice:    totalPrice,
+		Products:      products,
+		CreatedAt:     time.Now().UTC(),
+		Status:        "pending",
+		PaymentStatus: "pending",
 	}
 	err := service.repository.PutOrder(ctx, &order)
 	if err != nil {
@@ -65,18 +72,32 @@ func (service orderService) PostOrder(ctx context.Context, accountID uint64, tot
 	}()
 
 	go func() {
-		err = kafka.SendMessage(service, sharedevents.New("order.created", accountID, "order-created", map[string]any{
-			"order_id":    order.ID,
-			"account_id":  order.AccountID,
-			"total_price": order.TotalPrice,
-			"product_ids": productIDs(products),
-		}), config.OrderEventsTopic)
-		if err != nil {
-			log.Println("Failed to send order event:", err)
+		if sendErr := kafka.SendMessage(service, sharedevents.New("order.created", accountID, "order-created", orderEventData(&order)), config.OrderEventsTopic); sendErr != nil {
+			log.Println("Failed to send order event:", sendErr)
 		}
 	}()
 
 	return &order, nil
+}
+
+func (service orderService) ListOrders(ctx context.Context, status, paymentStatus string, accountID, skip, take uint64) ([]*models.Order, error) {
+	return service.repository.ListOrders(ctx, status, paymentStatus, accountID, skip, take)
+}
+func (service orderService) GetOrder(ctx context.Context, orderID uint64) (*models.Order, error) {
+	return service.repository.GetOrderByID(ctx, orderID)
+}
+func (service orderService) CancelOrder(ctx context.Context, orderID uint64, reason string) (*models.Order, error) {
+	if reason == "" {
+		return nil, errors.New("cancellation reason is required")
+	}
+	order, err := service.repository.CancelOrder(ctx, orderID, reason)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		_ = kafka.SendMessage(service, sharedevents.New("order.cancelled", order.AccountID, fmt.Sprintf("order-%d", order.ID), map[string]any{"order_id": order.ID, "reason": reason}), config.OrderEventsTopic)
+	}()
+	return order, nil
 }
 
 func (service orderService) GetOrdersForAccount(ctx context.Context, accountID uint64) ([]*models.Order, error) {
@@ -88,22 +109,40 @@ func (service orderService) UpdateOrderPaymentStatus(ctx context.Context, orderI
 		return err
 	}
 	go func() {
-		err := kafka.SendMessage(service, sharedevents.New("order.payment_status_updated", 0, "order-status-updated", map[string]any{
-			"order_id": orderId,
-			"status":   paymnetStatus,
-		}), config.OrderEventsTopic)
+		order, err := service.repository.GetOrderByID(context.Background(), orderId)
 		if err != nil {
+			log.Println("Failed to load order for status event:", err)
+			return
+		}
+		data := orderEventData(order)
+		data["status"] = order.Status
+		data["payment_status"] = paymnetStatus
+		eventType := "order.payment_status_updated"
+		if err := kafka.SendMessage(service, sharedevents.New(eventType, order.AccountID, fmt.Sprintf("order-%d-status-%s", orderId, paymnetStatus), data), config.OrderEventsTopic); err != nil {
 			log.Println("Failed to send order status event:", err)
 		}
 	}()
 	return nil
 }
 
-func productIDs(products []*models.OrderedProduct) []string {
-	ids := make([]string, 0, len(products))
-	for _, product := range products {
-		ids = append(ids, product.ID)
+func orderEventData(order *models.Order) map[string]any {
+	products := make([]map[string]any, 0, len(order.Products))
+	for _, product := range order.Products {
+		products = append(products, map[string]any{
+			"id":          product.ID,
+			"name":        product.Name,
+			"description": product.Description,
+			"price":       product.Price,
+			"quantity":    product.Quantity,
+		})
 	}
-	return ids
+	return map[string]any{
+		"order_id":       order.ID,
+		"account_id":     order.AccountID,
+		"total_price":    order.TotalPrice,
+		"currency":       "USD",
+		"status":         order.Status,
+		"payment_status": order.PaymentStatus,
+		"products":       products,
+	}
 }
-

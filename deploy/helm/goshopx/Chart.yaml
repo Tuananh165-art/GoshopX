@@ -1,0 +1,6 @@
+apiVersion: v2
+name: goshopx
+description: GoshopX application workloads for a single-node K3s laboratory
+type: application
+version: 0.1.0
+appVersion: "sha-managed-by-gitops"

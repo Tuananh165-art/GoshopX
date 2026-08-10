@@ -3,7 +3,6 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
 
 package pb;
-
 option go_package = "./pb";
 
 message Product {
@@ -12,47 +11,69 @@ message Product {
   string description = 3;
   double price = 4;
   int64 accountId = 5;
+  string category_id = 6;
+  string publish_status = 7;
+  string moderation_status = 8;
+  string moderation_reason = 9;
+  repeated ProductMedia media = 10;
+  double discount_percentage = 11;
+  double rating = 12;
+  int32 stock = 13;
+  repeated string tags = 14;
+  string brand = 15;
+  string sku = 16;
+  double weight = 17;
+  ProductDimensions dimensions = 18;
+  string warranty_information = 19;
+  string shipping_information = 20;
+  string availability_status = 21;
+  repeated ProductReview reviews = 22;
+  string return_policy = 23;
+  int32 minimum_order_quantity = 24;
+  ProductMeta meta = 25;
+  string thumbnail = 26;
+  repeated string images = 27;
 }
+message ProductMedia { string id = 1; string url = 2; string alt_text = 3; int32 sort_order = 4; }
+message ProductDimensions { double width = 1; double height = 2; double depth = 3; }
+message ProductReview { int32 rating = 1; string comment = 2; string date = 3; string reviewer_name = 4; string reviewer_email = 5; }
+message ProductMeta { string created_at = 1; string updated_at = 2; string barcode = 3; string qr_code = 4; }
+message Category { string id = 1; string name = 2; string slug = 3; string description = 4; bool is_active = 5; }
 
-message CreateProductRequest {
-  string name = 1;
-  string description = 2;
-  double price = 3;
-  int64  accountId = 4;
+message CreateProductRequest { string name = 1; string description = 2; double price = 3; int64 accountId = 4; }
+message GetProductsRequest { uint64 skip = 1; uint64 take = 2; repeated string ids = 3; string query = 4; string category = 5; }
+message AdminGetProductsRequest { uint64 skip = 1; uint64 take = 2; }
+message UpdateProductRequest { string id = 1; string name = 2; string description = 3; double price = 4; int64 accountId = 5; }
+message DeleteProductRequest { string productId = 1; int64 accountId = 2; }
+message ProductResponse { Product product = 1; }
+message AddProductReviewRequest {
+  string product_id = 1;
+  int32 rating = 2;
+  string comment = 3;
+  string reviewer_name = 4;
+  string reviewer_email = 5;
 }
-
-message GetProductsRequest {
-  uint64 skip = 1;
-  uint64 take = 2;
-  repeated string ids = 3;
-  string query = 4;
-}
-
-message UpdateProductRequest {
-  string id = 1;
-  string name = 2;
-  string description = 3;
-  double price = 4;
-  int64 accountId = 5;
-}
-
-message DeleteProductRequest {
-  string productId = 1;
-  int64 accountId = 2;
-}
-
-message ProductResponse {
-  Product product = 1;
-}
-
-message ProductsResponse {
-  repeated Product products = 1;
-}
+message ProductsResponse { repeated Product products = 1; }
+message AdminProductRequest { Product product = 1; string actor_role = 2; }
+message AdminDeleteProductRequest { string product_id = 1; string actor_role = 2; }
+message ModerateProductRequest { string product_id = 1; string publish_status = 2; string moderation_status = 3; string moderation_reason = 4; string actor_role = 5; }
+message AddProductMediaRequest { string product_id = 1; ProductMedia media = 2; string actor_role = 3; }
+message CategoryRequest { Category category = 1; string actor_role = 2; }
+message ListCategoriesRequest { bool active_only = 1; }
+message CategoriesResponse { repeated Category categories = 1; }
 
 service ProductService {
-  rpc PostProduct (CreateProductRequest) returns (ProductResponse) {}
-  rpc GetProduct (google.protobuf.StringValue) returns (ProductResponse) {}
-  rpc GetProducts (GetProductsRequest) returns (ProductsResponse) {}
-  rpc UpdateProduct (UpdateProductRequest) returns (ProductResponse) {}
-  rpc DeleteProduct (DeleteProductRequest) returns (google.protobuf.Empty) {}
+  rpc PostProduct (CreateProductRequest) returns (ProductResponse);
+  rpc GetProduct (google.protobuf.StringValue) returns (ProductResponse);
+  rpc GetProducts (GetProductsRequest) returns (ProductsResponse);
+  rpc AdminGetProducts (AdminGetProductsRequest) returns (ProductsResponse);
+  rpc UpdateProduct (UpdateProductRequest) returns (ProductResponse);
+  rpc DeleteProduct (DeleteProductRequest) returns (google.protobuf.Empty);
+  rpc AdminUpdateProduct (AdminProductRequest) returns (ProductResponse);
+  rpc AdminDeleteProduct (AdminDeleteProductRequest) returns (google.protobuf.Empty);
+  rpc ModerateProduct (ModerateProductRequest) returns (ProductResponse);
+  rpc AddProductMedia (AddProductMediaRequest) returns (ProductResponse);
+  rpc AddProductReview (AddProductReviewRequest) returns (ProductResponse);
+  rpc CreateCategory (CategoryRequest) returns (Category);
+  rpc ListCategories (ListCategoriesRequest) returns (CategoriesResponse);
 }

@@ -1,7 +1,12 @@
-﻿package main
+package main
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -43,7 +48,45 @@ func main() {
 	defer repository.Close()
 
 	service := internal.NewInventoryService(repository, producer)
+	if config.DummyJSONSeedEnabled {
+		if err := seedInventory(context.Background(), service); err != nil {
+			log.Printf("Inventory seed unavailable: %v", err)
+		} else {
+			log.Println("Seeded inventory availability from DummyJSON")
+		}
+	}
 	log.Println("Inventory listening on port 8080...")
 	log.Fatal(internal.ListenGRPC(service, 8080))
 }
 
+type dummyJSONInventoryResponse struct {
+	Products []struct {
+		ID    int `json:"id"`
+		Stock int `json:"stock"`
+	} `json:"products"`
+}
+
+func seedInventory(ctx context.Context, service internal.Service) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, config.DummyJSONURL+"/products?limit=0", nil)
+	if err != nil {
+		return err
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("dummyjson returned HTTP %d", response.StatusCode)
+	}
+	var payload dummyJSONInventoryResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return err
+	}
+	for _, product := range payload.Products {
+		if _, _, err := service.UpsertStock(ctx, strconv.Itoa(product.ID), int32(product.Stock), 0); err != nil {
+			return err
+		}
+	}
+	return nil
+}

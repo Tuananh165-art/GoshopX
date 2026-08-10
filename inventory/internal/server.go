@@ -1,4 +1,4 @@
-﻿package internal
+package internal
 
 import (
 	"context"
@@ -96,6 +96,25 @@ func (server *grpcServer) ListLowStock(ctx context.Context, request *pb.ListLowS
 	return response, nil
 }
 
+func (server *grpcServer) AdjustStock(ctx context.Context, request *pb.AdjustStockRequest) (*pb.UpsertStockResponse, error) {
+	stock, availability, err := server.service.AdjustStock(ctx, request.ProductId, request.Delta, request.ReorderLevel, request.Reason)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.UpsertStockResponse{Stock: encodeStock(stock), Availability: encodeAvailability(availability)}, nil
+}
+func (server *grpcServer) ListReservations(ctx context.Context, request *pb.ListReservationsRequest) (*pb.ListReservationsResponse, error) {
+	items, err := server.service.ListReservations(ctx, request.Status, request.Skip, request.Take)
+	if err != nil {
+		return nil, err
+	}
+	response := &pb.ListReservationsResponse{Reservations: make([]*pb.Reservation, 0, len(items))}
+	for _, item := range items {
+		response.Reservations = append(response.Reservations, encodeReservation(item))
+	}
+	return response, nil
+}
+
 func encodeStock(stock *models.Stock) *pb.Stock {
 	return &pb.Stock{
 		ProductId:    stock.ProductID,
@@ -126,4 +145,3 @@ func encodeReservation(reservation *models.StockReservation) *pb.Reservation {
 		ExpiresAtUnix: reservation.ExpiresAt.Unix(),
 	}
 }
-
