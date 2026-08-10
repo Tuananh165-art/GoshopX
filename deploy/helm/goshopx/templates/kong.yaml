@@ -14,7 +14,7 @@ data:
       - name: payment-webhook-upstream
         targets: [{ target: payment:8081, weight: 100 }]
       - name: web-upstream
-        targets: [{ target: web:80, weight: 100 }]
+        targets: [{ target: web:8080, weight: 100 }]
     services:
       - name: web-storefront
         protocol: http
@@ -57,6 +57,13 @@ spec:
     metadata: { labels: { app.kubernetes.io/name: goshopx, app.kubernetes.io/component: kong } }
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1337
+        runAsGroup: 1337
+        fsGroup: 1337
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: kong
           image: {{ .Values.global.kong.image | quote }}
@@ -67,16 +74,34 @@ spec:
           env:
             - { name: KONG_DATABASE, value: "off" }
             - { name: KONG_DECLARATIVE_CONFIG, value: /kong/kong.yaml }
+            - { name: KONG_PREFIX, value: /var/run/kong }
+            - { name: KONG_PROXY_ACCESS_LOG, value: /dev/stdout }
+            - { name: KONG_PROXY_ERROR_LOG, value: /dev/stderr }
+            - { name: KONG_ADMIN_ACCESS_LOG, value: /dev/stdout }
+            - { name: KONG_ADMIN_ERROR_LOG, value: /dev/stderr }
             - { name: KONG_PROXY_LISTEN, value: 0.0.0.0:8000 }
             - { name: KONG_ADMIN_LISTEN, value: 0.0.0.0:8001 }
             - { name: KONG_ADMIN_GUI_LISTEN, value: 0.0.0.0:8002 }
             - { name: KONG_ADMIN_GUI_URL, value: {{ default "http://localhost:8002" .Values.global.kong.managerURL | quote }} }
             - { name: KONG_ADMIN_GUI_API_URL, value: {{ default "http://localhost:8001" .Values.global.kong.managerAPIURL | quote }} }
-          volumeMounts: [{ name: config, mountPath: /kong, readOnly: true }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - { name: config, mountPath: /kong, readOnly: true }
+            - { name: kong-tmp, mountPath: /tmp }
+            - { name: kong-prefix, mountPath: /var/run/kong }
           resources: {{- toYaml .Values.global.kong.resources | nindent 12 }}
           livenessProbe: { tcpSocket: { port: proxy }, initialDelaySeconds: 15, periodSeconds: 15 }
           readinessProbe: { httpGet: { path: /health, port: proxy }, initialDelaySeconds: 5, periodSeconds: 10 }
-      volumes: [{ name: config, configMap: { name: kong-declarative-config } }]
+      volumes:
+        - { name: config, configMap: { name: kong-declarative-config } }
+        - { name: kong-tmp, emptyDir: {} }
+        - { name: kong-prefix, emptyDir: {} }
 ---
 apiVersion: v1
 kind: Service

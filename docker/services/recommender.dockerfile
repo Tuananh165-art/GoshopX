@@ -24,6 +24,10 @@ RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app/app:${PYTHONPATH}"
 
+RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin goshopx \
+    && chown -R goshopx:goshopx /app
+USER 10001:10001
+
 EXPOSE 8080
 
 WORKDIR /app
