@@ -42,4 +42,3 @@ func main() {
 	service := internal.NewOrderService(repository, producer)
 	log.Fatal(internal.ListenGRPC(service, config.AccountUrl, config.ProductUrl, 8080))
 }
-

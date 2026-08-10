@@ -13,4 +13,3 @@ func Bounds(pagination *generated.PaginationInput) (uint64, uint64) {
 	}
 	return skipValue, takeValue
 }
-

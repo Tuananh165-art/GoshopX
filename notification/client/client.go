@@ -75,4 +75,3 @@ func (client *Client) MarkAllRead(ctx context.Context, accountID uint64) (int64,
 	}
 	return response.UpdatedCount, nil
 }
-

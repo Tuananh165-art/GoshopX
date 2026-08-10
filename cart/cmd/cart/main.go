@@ -38,4 +38,3 @@ func main() {
 	log.Println("Cart listening on port 8080...")
 	log.Fatal(internal.ListenGRPC(service, 8080))
 }
-

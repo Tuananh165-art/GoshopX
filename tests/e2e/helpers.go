@@ -132,4 +132,3 @@ func doRequest(t *testing.T, query string, variables map[string]interface{}) Gra
 	assert.NoError(t, err)
 	return gqlResp
 }
-

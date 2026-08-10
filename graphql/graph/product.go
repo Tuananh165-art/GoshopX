@@ -21,4 +21,3 @@ func (resolver *productResolver) Availability(ctx context.Context, obj *generate
 	}
 	return toGeneratedAvailability(availability), nil
 }
-

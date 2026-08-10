@@ -10,10 +10,10 @@ type Stock struct {
 }
 
 type Availability struct {
-	ProductID          string `json:"product_id"`
-	TotalQuantity      int32  `json:"total_quantity"`
-	ReservedQuantity   int32  `json:"reserved_quantity"`
-	AvailableQuantity  int32  `json:"available_quantity"`
-	ReorderLevel       int32  `json:"reorder_level"`
-	HasActiveLowStock  bool   `json:"has_active_low_stock"`
+	ProductID         string `json:"product_id"`
+	TotalQuantity     int32  `json:"total_quantity"`
+	ReservedQuantity  int32  `json:"reserved_quantity"`
+	AvailableQuantity int32  `json:"available_quantity"`
+	ReorderLevel      int32  `json:"reorder_level"`
+	HasActiveLowStock bool   `json:"has_active_low_stock"`
 }

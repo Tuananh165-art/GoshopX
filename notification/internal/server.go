@@ -116,4 +116,3 @@ func encodeNotification(notification *models.Notification) *pb.Notification {
 	}
 	return result
 }
-
