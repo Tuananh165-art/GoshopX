@@ -16,7 +16,7 @@ global:
 # This value is updated by .github/workflows/release-gitops.yml after an image
 # is published. Use a commit SHA only; never deploy mutable `latest` in GitOps.
 image:
-  tag: bd3b08f7637490145334e26ed6e2bae588122820
+  tag: 6bd98fb854c2dd3a916c7bd0e008bdc3d65e0a69
 
 services:
   # Phase 0 keeps core commerce enabled. Phase 3 can enable every service only
