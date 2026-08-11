@@ -48,7 +48,7 @@ services:
   account:
     enabled: true
     port: 8080
-    secretKeys: { DATABASE_URL: ACCOUNT_DATABASE_URL, SECRET_KEY: SECRET_KEY }
+    secretKeys: { DATABASE_URL: ACCOUNT_DATABASE_URL, SECRET_KEY: SECRET_KEY, GOOGLE_CLIENT_ID: GOOGLE_CLIENT_ID }
     resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
   product:
     enabled: true

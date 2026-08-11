@@ -16,16 +16,40 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const googleButton = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (mode !== 'login' || !googleButton.current || !import.meta.env.VITE_GOOGLE_CLIENT_ID || !(window as any).google) return
-    const google = (window as any).google
-    google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      callback: async (response: { credential: string }) => {
-        try { setError(''); const account = await loginWithGoogle(response.credential); navigate(isAdminAccount(account) ? '/admin' : '/account/orders') }
-        catch (cause) { setError(cause instanceof Error ? cause.message : 'Đăng nhập Google thất bại. Vui lòng thử lại.') }
-      },
-    })
-    google.accounts.id.renderButton(googleButton.current, { theme: 'outline', size: 'large', width: 320, text: 'continue_with' })
+    const clientID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (mode !== 'login' || !googleButton.current || !clientID) return
+
+    let cancelled = false
+    const renderGoogleButton = () => {
+      const google = (window as any).google
+      if (cancelled || !google || !googleButton.current) return false
+
+      google.accounts.id.initialize({
+        client_id: clientID,
+        callback: async (response: { credential: string }) => {
+          try { setError(''); const account = await loginWithGoogle(response.credential); navigate(isAdminAccount(account) ? '/admin' : '/account/orders') }
+          catch (cause) { setError(cause instanceof Error ? cause.message : 'Đăng nhập Google thất bại. Vui lòng thử lại.') }
+        },
+      })
+      googleButton.current.replaceChildren()
+      google.accounts.id.renderButton(googleButton.current, { theme: 'outline', size: 'large', width: 320, text: 'continue_with' })
+      return true
+    }
+
+    if (renderGoogleButton()) return () => { cancelled = true }
+
+    let script = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]')
+    if (!script) {
+      script = document.createElement('script')
+      script.src = 'https://accounts.google.com/gsi/client'
+      script.async = true
+      document.head.appendChild(script)
+    }
+    script.addEventListener('load', renderGoogleButton, { once: true })
+    return () => {
+      cancelled = true
+      script?.removeEventListener('load', renderGoogleButton)
+    }
   }, [loginWithGoogle, mode, navigate])
 
   async function submit(event: FormEvent<HTMLFormElement>) {

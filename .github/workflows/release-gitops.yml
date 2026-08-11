@@ -50,6 +50,8 @@ jobs:
           file: docker/services/${{ matrix.dockerfile }}.dockerfile
           push: true
           tags: ghcr.io/${{ vars.GHCR_OWNER }}/goshopx-${{ matrix.service }}:${{ github.sha }}
+          build-args: |
+            VITE_GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - uses: aquasecurity/trivy-action@v0.36.0
