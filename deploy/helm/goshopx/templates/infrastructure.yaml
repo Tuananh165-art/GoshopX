@@ -40,7 +40,7 @@ spec:
 {{- end }}
 {{- range $name, $component := dict
   "redis" (dict "image" "redis:7.4-alpine" "port" 6379 "command" (list "redis-server" "--appendonly" "yes"))
-  "kafka" (dict "image" "docker.io/apache/kafka:4.1.1" "port" 9092 "env" (dict "KAFKA_NODE_ID" "1" "KAFKA_PROCESS_ROLES" "broker,controller" "KAFKA_LISTENERS" "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093" "KAFKA_ADVERTISED_LISTENERS" "PLAINTEXT://kafka:9092" "KAFKA_CONTROLLER_LISTENER_NAMES" "CONTROLLER" "KAFKA_CONTROLLER_QUORUM_VOTERS" "1@kafka:9093" "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP" "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR" "1"))
+  "kafka" (dict "image" "docker.io/apache/kafka:4.1.1" "port" 9092 "extraPorts" (list (dict "name" "controller" "port" 9093)) "env" (dict "KAFKA_NODE_ID" "1" "KAFKA_PROCESS_ROLES" "broker,controller" "KAFKA_LISTENERS" "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093" "KAFKA_ADVERTISED_LISTENERS" "PLAINTEXT://kafka:9092" "KAFKA_CONTROLLER_LISTENER_NAMES" "CONTROLLER" "KAFKA_CONTROLLER_QUORUM_VOTERS" "1@kafka:9093" "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP" "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR" "1"))
   "product-db" (dict "image" "docker.elastic.co/elasticsearch/elasticsearch-oss:6.2.4" "port" 9200 "env" (dict "discovery.type" "single-node" "ES_JAVA_OPTS" "-Xms512m -Xmx512m"))
   "minio" (dict "image" "minio/minio:RELEASE.2025-04-22T22-12-26Z" "port" 9000 "command" (list "minio" "server" "/data" "--console-address" ":9001"))
   "milvus-etcd" (dict "image" "quay.io/coreos/etcd:v3.5.18" "port" 2379 "command" (list "etcd" "--advertise-client-urls=http://milvus-etcd:2379" "--listen-client-urls=http://0.0.0.0:2379" "--data-dir" "/etcd"))
@@ -63,7 +63,11 @@ spec:
           {{- with $component.command }}
           command: {{ toYaml . | nindent 12 }}
           {{- end }}
-          ports: [{ name: tcp, containerPort: {{ $component.port }} }]
+          ports:
+            - { name: tcp, containerPort: {{ $component.port }} }
+          {{- range $extra := $component.extraPorts }}
+            - { name: {{ $extra.name }}, containerPort: {{ $extra.port }} }
+          {{- end }}
           {{- with $component.env }}
           env:
           {{- range $key, $value := . }}
@@ -78,7 +82,11 @@ metadata: { name: {{ $name }} }
 spec:
   type: ClusterIP
   selector: { app: {{ $name }} }
-  ports: [{ name: tcp, port: {{ $component.port }}, targetPort: tcp }]
+  ports:
+    - { name: tcp, port: {{ $component.port }}, targetPort: tcp }
+  {{- range $extra := $component.extraPorts }}
+    - { name: {{ $extra.name }}, port: {{ $extra.port }}, targetPort: {{ $extra.name }} }
+  {{- end }}
 {{- end }}
 ---
 apiVersion: apps/v1
