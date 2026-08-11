@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"gopkg.in/olivere/elastic.v5"
 
@@ -41,7 +42,31 @@ func NewElasticRepository(url string) (Repository, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	for _, index := range []string{productIndex, categoryIndex} {
+		if err := ensureIndex(ctx, client, index); err != nil {
+			client.Stop()
+			return nil, err
+		}
+	}
 	return &elasticRepository{client: client}, nil
+}
+
+func ensureIndex(ctx context.Context, client *elastic.Client, index string) error {
+	exists, err := client.IndexExists(index).Do(ctx)
+	if err != nil || exists {
+		return err
+	}
+	_, err = client.CreateIndex(index).Do(ctx)
+	if err == nil {
+		return nil
+	}
+	var elasticError *elastic.Error
+	if errors.As(err, &elasticError) && elasticError.Details != nil && elasticError.Details.Type == "resource_already_exists_exception" {
+		return nil
+	}
+	return err
 }
 
 func (r *elasticRepository) Close() { r.client.Stop() }
