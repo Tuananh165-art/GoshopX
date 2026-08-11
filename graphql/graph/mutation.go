@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -26,6 +28,21 @@ import (
 var ErrInvalidParameter = errors.New("invalid parameter")
 
 const codPaymentStatus = "paid"
+
+func setSessionCookie(ctx *gin.Context, token string, maxAge int) {
+	// An empty Domain makes this a host-only cookie. Hard-coding localhost
+	// prevents browsers from accepting it when GraphQL is served by a domain.
+	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.SetCookie("token", token, maxAge, "/", "", requestUsesHTTPS(ctx), true)
+}
+
+func requestUsesHTTPS(ctx *gin.Context) bool {
+	if ctx.Request != nil && ctx.Request.TLS != nil {
+		return true
+	}
+	forwardedProto := strings.TrimSpace(strings.Split(ctx.GetHeader("X-Forwarded-Proto"), ",")[0])
+	return strings.EqualFold(forwardedProto, "https")
+}
 
 type mutationResolver struct {
 	server *Server
@@ -70,7 +87,7 @@ func (resolver *mutationResolver) Register(ctx context.Context, in generated.Reg
 	if !ok {
 		return nil, errors.New("could not retrieve gin context")
 	}
-	ginContext.SetCookie("token", token, 3600, "/", "localhost", false, true)
+	setSessionCookie(ginContext, token, 3600)
 	return &generated.AuthResponse{Token: token}, nil
 }
 
@@ -87,7 +104,7 @@ func (resolver *mutationResolver) Login(ctx context.Context, in generated.LoginI
 	if !ok {
 		return nil, errors.New("could not retrieve gin context")
 	}
-	ginContext.SetCookie("token", token, 3600, "/", "localhost", false, true)
+	setSessionCookie(ginContext, token, 3600)
 	return &generated.AuthResponse{Token: token}, nil
 }
 
@@ -103,7 +120,7 @@ func (resolver *mutationResolver) LoginWithGoogle(ctx context.Context, in genera
 	if !ok {
 		return nil, errors.New("could not retrieve gin context")
 	}
-	ginContext.SetCookie("token", token, 3600, "/", "localhost", false, true)
+	setSessionCookie(ginContext, token, 3600)
 	return &generated.AuthResponse{Token: token}, nil
 }
 
@@ -112,7 +129,7 @@ func (resolver *mutationResolver) Logout(ctx context.Context) (bool, error) {
 	if !ok {
 		return false, errors.New("could not retrieve gin context")
 	}
-	ginContext.SetCookie("token", "", -1, "/", "localhost", false, true)
+	setSessionCookie(ginContext, "", -1)
 	return true, nil
 }
 
