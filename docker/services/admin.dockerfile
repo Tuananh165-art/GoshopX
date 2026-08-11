@@ -1,8 +1,11 @@
 FROM golang:1.26.5-alpine3.23 AS build
-RUN apk --no-cache add gcc g++ make ca-certificates
+RUN apk --no-cache add gcc g++ make ca-certificates git
 WORKDIR /go/src/github.com/Tuananh165art/GoshopX
 COPY go.mod go.sum ./
-RUN go mod download
+# GitHub-hosted runners occasionally receive 403 responses from proxy.golang.org.
+# Keep Go checksum verification enabled, then fall back to fetching public modules
+# directly from their VCS origins only when the proxy download fails.
+RUN go mod download || GOPROXY=direct go mod download
 COPY admin admin
 COPY pkg pkg
 RUN GO111MODULE=on go build -mod=mod -o /go/bin/app ./admin/cmd/admin
