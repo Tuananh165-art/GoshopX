@@ -65,7 +65,7 @@ services:
     enabled: true
     port: 8080
     extraPorts: [{ name: webhook, port: 8081 }]
-    secretKeys: { DATABASE_URL: PAYMENT_DATABASE_URL, VNPAY_TMN_CODE: VNPAY_TMN_CODE, VNPAY_HASH_SECRET: VNPAY_HASH_SECRET }
+    secretKeys: { DATABASE_URL: PAYMENT_DATABASE_URL, VNPAY_TMN_CODE: VNPAY_TMN_CODE, VNPAY_HASH_SECRET: VNPAY_HASH_SECRET, VNPAY_PAYMENT_URL: VNPAY_PAYMENT_URL }
     resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 300m, memory: 192Mi } }
   inventory:
     enabled: true

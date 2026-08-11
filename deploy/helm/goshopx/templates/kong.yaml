@@ -8,13 +8,13 @@ data:
     _transform: true
     upstreams:
       - name: graphql-upstream
-        targets: [{ target: graphql:8080, weight: 100 }]
+        targets: [{ target: graphql.{{ .Release.Namespace }}.svc.cluster.local:8080, weight: 100 }]
         healthchecks:
           active: { type: http, http_path: /health, healthy: { interval: 5, successes: 2 }, unhealthy: { interval: 5, http_failures: 2, timeouts: 2 } }
       - name: payment-webhook-upstream
-        targets: [{ target: payment:8081, weight: 100 }]
+        targets: [{ target: payment.{{ .Release.Namespace }}.svc.cluster.local:8081, weight: 100 }]
       - name: web-upstream
-        targets: [{ target: web:8080, weight: 100 }]
+        targets: [{ target: web.{{ .Release.Namespace }}.svc.cluster.local:8080, weight: 100 }]
     services:
       - name: web-storefront
         protocol: http
