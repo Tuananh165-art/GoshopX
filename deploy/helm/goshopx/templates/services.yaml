@@ -26,6 +26,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
       {{- with $.Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -45,6 +48,9 @@ spec:
             - name: {{ $extra.name }}
               containerPort: {{ $extra.port }}
           {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           envFrom:
             - configMapRef:
                 name: {{ include "goshopx.name" $ }}-config
@@ -98,3 +104,4 @@ spec:
 {{- end }}
 {{- end }}
 {{- end }}
+
