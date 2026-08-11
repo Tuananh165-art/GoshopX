@@ -2,7 +2,9 @@
 # Traefik is K3s's ingress controller only. It forwards every public request to
 # Kong; Kong retains the gateway policy and routes declared in its DB-less file.
 {{- if eq .Values.global.ingress.className "traefik" }}
-apiVersion: traefik.io/v1alpha1
+{{- /* K3s installations may provide either the current traefik.io CRD or
+      Traefik's legacy traefik.containo.us CRD. */}}
+apiVersion: {{ if .Capabilities.APIVersions.Has "traefik.io/v1alpha1/Middleware" }}traefik.io/v1alpha1{{ else }}traefik.containo.us/v1alpha1{{ end }}
 kind: Middleware
 metadata:
   name: goshopx-force-https
