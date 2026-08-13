@@ -43,7 +43,9 @@ func main() {
 	service := internal.NewProductService(repository, producer)
 	if config.DummyJSONSeedEnabled {
 		seedCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		seeded, seedErr := internal.NewDummyJSONClient(config.DummyJSONBaseURL, nil).Seed(seedCtx, repository, config.DummyJSONSeedLimit)
+		seeded, seedErr := internal.NewDummyJSONClient(config.DummyJSONBaseURL, nil).
+			WithPriceVNDExchange(config.DummyJSONPriceVNDRate).
+			Seed(seedCtx, repository, config.DummyJSONSeedLimit)
 		cancel()
 		if seedErr != nil {
 			log.Fatalf("DummyJSON seed failed after %d products: %v", seeded, seedErr)

@@ -22,6 +22,7 @@ func TestDummyJSONProductModelPreservesCatalogFields(t *testing.T) {
 	assert.Equal(t, "1", product.ID)
 	assert.Equal(t, "Phone", product.Name)
 	assert.Equal(t, "smartphones", product.CategoryID)
+	assert.Equal(t, 99.5, product.Price)
 	assert.Equal(t, 10.0, product.DiscountPercentage)
 	assert.Equal(t, 4.5, product.Rating)
 	assert.Equal(t, 7, product.Stock)
@@ -46,13 +47,14 @@ func TestDummyJSONClientListAndSeed(t *testing.T) {
 
 	repository := new(MockRepository)
 	repository.On("PutProductWithID", mock.Anything, mock.MatchedBy(func(product any) bool {
-		return product.(*models.Product).ID == "1"
+		item := product.(*models.Product)
+		return item.ID == "1" && item.Price == 250000
 	})).Return(nil).Once()
 	repository.On("PutCategory", mock.Anything, mock.MatchedBy(func(category any) bool {
 		item := category.(*models.Category)
 		return item.ID == "smartphones" && item.Slug == "smartphones" && item.IsActive
 	})).Return(nil).Once()
-	seeded, err := client.Seed(context.Background(), repository, 1)
+	seeded, err := client.WithPriceVNDExchange(25000).Seed(context.Background(), repository, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, seeded)
 	repository.AssertExpectations(t)

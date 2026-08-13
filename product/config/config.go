@@ -6,11 +6,12 @@ import (
 )
 
 var (
-	DatabaseURL          string
-	BootstrapServers     string
-	DummyJSONBaseURL     string
-	DummyJSONSeedEnabled bool
-	DummyJSONSeedLimit   uint64
+	DatabaseURL           string
+	BootstrapServers      string
+	DummyJSONBaseURL      string
+	DummyJSONSeedEnabled  bool
+	DummyJSONSeedLimit    uint64
+	DummyJSONPriceVNDRate float64
 )
 
 func init() {
@@ -24,6 +25,12 @@ func init() {
 	if value := os.Getenv("DUMMYJSON_SEED_LIMIT"); value != "" {
 		if parsed, err := strconv.ParseUint(value, 10, 64); err == nil {
 			DummyJSONSeedLimit = parsed
+		}
+	}
+	DummyJSONPriceVNDRate = 25000
+	if value := os.Getenv("DUMMYJSON_PRICE_VND_RATE"); value != "" {
+		if parsed, err := strconv.ParseFloat(value, 64); err == nil && parsed > 0 {
+			DummyJSONPriceVNDRate = parsed
 		}
 	}
 }

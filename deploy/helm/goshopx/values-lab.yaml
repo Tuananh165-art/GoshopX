@@ -27,8 +27,10 @@ services:
   # Phase 0 keeps core commerce enabled. Phase 3 can enable every service only
   # after Kafka, Milvus and recommender DB capacity have been measured.
   admin: { enabled: true }
-  recommender-server: { enabled: false }
-  recommender-sync: { enabled: false }
+  # The server provides the customer chatbot; sync performs the initial
+  # catalog import from Product and keeps the recommender projection current.
+  recommender-server: { enabled: true }
+  recommender-sync: { enabled: true }
   recommender-train: { enabled: false }
 
 config:
@@ -37,3 +39,6 @@ config:
   # enabling the heavier recommender workload.
   DUMMYJSON_SEED_ENABLED: "true"
   DUMMYJSON_SEED_LIMIT: "100"
+  # DummyJSON prices are USD. GoshopX stores and displays product prices in VND.
+  DUMMYJSON_PRICE_VND_RATE: "25000"
+  PRODUCT_API: http://product:8081/products

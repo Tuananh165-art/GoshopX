@@ -61,8 +61,9 @@ func (p DummyJSONProduct) Model() *models.Product {
 }
 
 type DummyJSONClient struct {
-	baseURL string
-	http    *http.Client
+	baseURL          string
+	http             *http.Client
+	priceVNDExchange float64
 }
 
 func NewDummyJSONClient(baseURL string, httpClient *http.Client) *DummyJSONClient {
@@ -72,7 +73,16 @@ func NewDummyJSONClient(baseURL string, httpClient *http.Client) *DummyJSONClien
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	return &DummyJSONClient{baseURL: strings.TrimRight(baseURL, "/"), http: httpClient}
+	return &DummyJSONClient{baseURL: strings.TrimRight(baseURL, "/"), http: httpClient, priceVNDExchange: 1}
+}
+
+// WithPriceVNDExchange converts DummyJSON's USD sample prices to VND before
+// persisting them in the VND-only GoshopX catalog.
+func (c *DummyJSONClient) WithPriceVNDExchange(rate float64) *DummyJSONClient {
+	if rate > 0 {
+		c.priceVNDExchange = rate
+	}
+	return c
 }
 
 func (c *DummyJSONClient) get(ctx context.Context, path string, result any) error {
@@ -135,7 +145,9 @@ func (c *DummyJSONClient) Seed(ctx context.Context, repository Repository, limit
 			return int(imported), err
 		}
 		for _, item := range page.Products {
-			if err := repository.PutProductWithID(ctx, item.Model()); err != nil {
+			product := item.Model()
+			product.Price *= c.priceVNDExchange
+			if err := repository.PutProductWithID(ctx, product); err != nil {
 				return int(imported), err
 			}
 			if _, exists := categories[item.Category]; !exists {

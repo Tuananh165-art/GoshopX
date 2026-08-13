@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 import json
 import logging
+import threading
+import time
 
 from chat.llm_client import LLMClient, LLMConfigurationError
 from chat.service import ChatService
@@ -16,27 +18,47 @@ logger = logging.getLogger(__name__)
 
 
 def load_chat_service() -> ChatService:
-    with get_session() as session:
-        products = session.query(Product).all()
-    catalog = {
-        str(product.id): {
-            "id": str(product.id),
-            "name": product.name,
-            "description": product.description,
-            "price": product.price,
-            "category": product.category,
-            "brand": product.brand,
-            "tags": json.loads(product.tags_json or "[]"),
-            "thumbnail": product.thumbnail,
-            "images": json.loads(product.images_json or "[]"),
-            "publishStatus": product.publish_status,
-            "moderationStatus": product.moderation_status,
-            "stock": product.stock,
+    def read_catalog() -> dict[str, dict]:
+        with get_session() as session:
+            products = session.query(Product).all()
+        return {
+            str(product.id): {
+                "id": str(product.id),
+                "name": product.name,
+                "description": product.description,
+                "price": product.price,
+                "category": product.category,
+                "brand": product.brand,
+                "tags": json.loads(product.tags_json or "[]"),
+                "thumbnail": product.thumbnail,
+                "images": json.loads(product.images_json or "[]"),
+                "publishStatus": product.publish_status,
+                "moderationStatus": product.moderation_status,
+                "stock": product.stock,
+            }
+            for product in products
         }
-        for product in products
-    }
+
+    catalog = read_catalog()
+    catalog_lock = threading.Lock()
+    last_catalog_refresh = 0.0
+
+    def refresh_catalog() -> None:
+        nonlocal last_catalog_refresh
+        # The sync worker may finish after this gRPC server starts. Refreshing
+        # the shared dictionary makes the chatbot see seeded/updated products
+        # without a server restart, while bounding PostgreSQL reads.
+        if time.monotonic() - last_catalog_refresh < 15:
+            return
+        with catalog_lock:
+            if time.monotonic() - last_catalog_refresh < 15:
+                return
+            catalog.clear()
+            catalog.update(read_catalog())
+            last_catalog_refresh = time.monotonic()
 
     def search(plan) -> Iterable[Candidate]:
+        refresh_catalog()
         tokens = set(getattr(plan, "keywords", ()))
         category = str(getattr(plan, "category", "") or "").casefold()
         brand = str(getattr(plan, "brand", "") or "").casefold()
