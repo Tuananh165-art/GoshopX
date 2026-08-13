@@ -26,6 +26,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# implicit loads OpenMP-backed native extensions at import time. The builder
+# has the compiler toolchain, but the slim runtime must provide libgomp too.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app /app
 
 # The application runs from /app/.venv. Remove global packaging tools whose

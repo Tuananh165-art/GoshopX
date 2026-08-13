@@ -30,7 +30,7 @@ services:
   # The server provides the customer chatbot; sync performs the initial
   # catalog import from Product and keeps the recommender projection current.
   recommender-server: { enabled: true }
-  recommender-sync: { enabled: true }
+  recommender-sync: { enabled: true, probesEnabled: false }
   recommender-train: { enabled: false }
 
 config:

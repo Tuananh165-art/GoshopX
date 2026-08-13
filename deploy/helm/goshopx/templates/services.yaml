@@ -73,6 +73,7 @@ spec:
               drop: ["ALL"]
             seccompProfile:
               type: RuntimeDefault
+          {{- if or (not (hasKey $service "probesEnabled")) $service.probesEnabled }}
           livenessProbe:
             tcpSocket: { port: grpc }
             initialDelaySeconds: 20
@@ -81,6 +82,7 @@ spec:
             tcpSocket: { port: grpc }
             initialDelaySeconds: 5
             periodSeconds: 10
+          {{- end }}
 ---
 apiVersion: v1
 kind: Service
