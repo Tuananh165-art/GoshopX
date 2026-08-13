@@ -21,7 +21,14 @@ image:
 services:
   # Phase 0 keeps core commerce enabled. Phase 3 can enable every service only
   # after Kafka, Milvus and recommender DB capacity have been measured.
-  admin: { enabled: false }
+  admin: { enabled: true }
   recommender-server: { enabled: false }
   recommender-sync: { enabled: false }
   recommender-train: { enabled: false }
+
+config:
+  # Seed a bounded public catalog once whenever Product starts in the lab.
+  # This supplies visible products, categories, and remote image URLs without
+  # enabling the heavier recommender workload.
+  DUMMYJSON_SEED_ENABLED: "true"
+  DUMMYJSON_SEED_LIMIT: "100"
