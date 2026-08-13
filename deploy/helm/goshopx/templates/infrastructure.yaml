@@ -117,6 +117,7 @@ spec:
   type: {{ $dashType }}
   selector: { app: kibana }
   ports: [{ name: http, port: 5601, targetPort: http{{ if .Values.infrastructure.dashboards.nodePort }}, nodePort: {{ .Values.infrastructure.dashboards.kibana }}{{ end }} }]
+{{ if .Values.infrastructure.dashboards.kafkaUIEnabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -145,6 +146,7 @@ spec:
   type: {{ $dashType }}
   selector: { app: kafka-ui }
   ports: [{ name: http, port: 8080, targetPort: http{{ if .Values.infrastructure.dashboards.nodePort }}, nodePort: {{ .Values.infrastructure.dashboards.kafkaUI }}{{ end }} }]
+{{ end }}
 ---
 apiVersion: apps/v1
 kind: Deployment

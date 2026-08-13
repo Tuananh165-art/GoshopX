@@ -29,6 +29,9 @@ infrastructure:
     nodePort: false
     kibana: 30601
     kafkaUI: 30602
+    # Kafka UI is an optional operator dashboard. Keep it disabled by default
+    # in the single-node lab; Kafka itself remains enabled for application events.
+    kafkaUIEnabled: false
     minioConsole: 30603
     redisInsight: 30604
   storageClass: local-path
