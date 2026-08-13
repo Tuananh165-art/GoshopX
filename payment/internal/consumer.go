@@ -73,7 +73,7 @@ func (ec *EventConsumer) handleProductCreated(event models.ProductEvent) {
 		*event.Data.ProductID, *event.Data.Name, *event.Data.Price)
 
 	ctx := context.Background()
-	err := ec.service.RegisterProduct(ctx, *event.Data.Name, priceInVND(*event.Data.Price), "", *event.Data.ProductID)
+	err := ec.service.RegisterProduct(ctx, *event.Data.Name, roundedVNDPrice(*event.Data.Price), "", *event.Data.ProductID)
 	if err != nil {
 		log.Printf("Failed to register product with payment provider: %v", err)
 	}
@@ -87,7 +87,7 @@ func (ec *EventConsumer) handleProductUpdated(event models.ProductEvent) {
 
 	log.Printf("Payment service received product updated event: ID=%s", *event.Data.ProductID)
 	ctx := context.Background()
-	err := ec.service.UpdateProduct(ctx, *event.Data.ProductID, *event.Data.Name, priceInVND(*event.Data.Price))
+	err := ec.service.UpdateProduct(ctx, *event.Data.ProductID, *event.Data.Name, roundedVNDPrice(*event.Data.Price))
 	if err != nil {
 		log.Printf("Failed to update product with payment provider: %v", err)
 	}

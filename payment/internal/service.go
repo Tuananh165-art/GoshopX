@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/IBM/sarama"
-	"github.com/Tuananh165art/GoshopX/payment/config"
 	"github.com/Tuananh165art/GoshopX/payment/models"
 	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
 	"github.com/Tuananh165art/GoshopX/payment/vnpay"
@@ -143,7 +142,7 @@ func (d *paymentService) productsForCheckout(ctx context.Context, ids []string) 
 		byID[product.ProductID] = product
 	}
 	for _, id := range ids {
-		if _, ok := byID[id]; ok || d.catalog == nil {
+		if d.catalog == nil {
 			continue
 		}
 		catalogProduct, err := d.catalog.GetProduct(ctx, id)
@@ -153,7 +152,15 @@ func (d *paymentService) productsForCheckout(ctx context.Context, ids []string) 
 		if catalogProduct == nil || catalogProduct.ID != id {
 			continue
 		}
-		mirror := &models.Product{ProductID: id, Price: priceInVND(catalogProduct.Price), Currency: "VND"}
+		// Product owns the catalog price. It is already denominated in VND, so
+		// never apply the DummyJSON USD conversion here. Refreshing the mirror
+		// on checkout also replaces old rows created before that conversion was
+		// moved into Product.
+		price := discountedVNDPrice(catalogProduct.Price, catalogProduct.DiscountPercentage)
+		if price <= 0 {
+			return nil, errors.New("invalid catalog product price")
+		}
+		mirror := &models.Product{ProductID: id, Price: price, Currency: "VND"}
 		if err := d.paymentRepository.SaveProduct(ctx, mirror); err != nil {
 			return nil, err
 		}
@@ -168,11 +175,21 @@ func (d *paymentService) productsForCheckout(ctx context.Context, ids []string) 
 	return ordered, nil
 }
 
-func priceInVND(price float64) int64 {
+func roundedVNDPrice(price float64) int64 {
 	if price <= 0 || math.IsNaN(price) || math.IsInf(price, 0) {
 		return 0
 	}
-	return int64(math.Round(price * config.VNDPerUSD))
+	return int64(math.Round(price))
+}
+
+func discountedVNDPrice(price, discountPercentage float64) int64 {
+	if math.IsNaN(discountPercentage) || math.IsInf(discountPercentage, 0) || discountPercentage >= 100 {
+		return 0
+	}
+	if discountPercentage > 0 {
+		price *= 1 - discountPercentage/100
+	}
+	return roundedVNDPrice(price)
 }
 
 func (d *paymentService) HandleVNPAYIPN(ctx context.Context, values url.Values) (*models.Transaction, bool, string) {

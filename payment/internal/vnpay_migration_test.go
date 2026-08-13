@@ -47,6 +47,12 @@ func (r *vnpayMigrationRepository) GetProductsByIDs(_ context.Context, ids []str
 	return out, nil
 }
 func (r *vnpayMigrationRepository) SaveProduct(_ context.Context, product *models.Product) error {
+	for index, current := range r.products {
+		if current.ProductID == product.ProductID {
+			r.products[index] = product
+			return nil
+		}
+	}
 	r.products = append(r.products, product)
 	return nil
 }
@@ -104,19 +110,22 @@ func (stub catalogStub) GetProduct(context.Context, string) (*productmodels.Prod
 	return stub.product, nil
 }
 
-func TestVNPAYCheckoutHydratesMissingProductFromCatalog(t *testing.T) {
+func TestVNPAYCheckoutRefreshesStaleMirrorFromDiscountedVNDCatalog(t *testing.T) {
 	client, err := vnpay.NewClient(vnpay.Config{TmnCode: "TEST", HashSecret: "test-secret", PaymentURL: "https://example.test/pay"})
 	require.NoError(t, err)
-	repo := &vnpayMigrationRepository{}
-	service := NewVNPAYPaymentServiceWithCatalog(client, repo, nil, catalogStub{product: &productmodels.Product{ID: "1", Price: 10.25}})
+	repo := &vnpayMigrationRepository{products: []*models.Product{{ProductID: "1", Price: 874993750, Currency: "VND"}}}
+	service := NewVNPAYPaymentServiceWithCatalog(client, repo, nil, catalogStub{product: &productmodels.Product{ID: "1", Price: 34999750, DiscountPercentage: 9.38}})
 
 	checkoutURL, err := service.CreateCheckoutSession(context.Background(), 7, "https://shop.example/return", "203.0.113.10", []*pb.CheckoutCartItem{{ProductId: "1", Quantity: 1}}, 42, nil)
 	require.NoError(t, err)
 	values, err := url.Parse(checkoutURL)
 	require.NoError(t, err)
-	require.Equal(t, "25625000", values.Query().Get("vnp_Amount"))
+	require.Equal(t, "3171677300", values.Query().Get("vnp_Amount"))
 	require.Len(t, repo.products, 1)
-	require.Equal(t, int64(256250), repo.products[0].Price)
+	require.Equal(t, int64(31716773), repo.products[0].Price)
+	transaction, err := repo.GetTransactionByPaymentID(context.Background(), values.Query().Get("vnp_TxnRef"))
+	require.NoError(t, err)
+	require.Equal(t, int64(31716773), transaction.TotalPrice)
 }
 
 func TestVNPAYProviderOnlyOperationsAreUnsupported(t *testing.T) {
