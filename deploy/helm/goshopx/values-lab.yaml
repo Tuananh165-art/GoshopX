@@ -42,3 +42,7 @@ config:
   # DummyJSON prices are USD. GoshopX stores and displays product prices in VND.
   DUMMYJSON_PRICE_VND_RATE: "25000"
   PRODUCT_API: http://product:8081/products
+  # The chart mounts /tmp as an emptyDir while the container root filesystem is
+  # read-only. Keep lab recommender artifacts there so its fallback service can
+  # create the directory even when no trained model is available.
+  ARTIFACTS_LOCAL_PATH: /tmp/artifacts
