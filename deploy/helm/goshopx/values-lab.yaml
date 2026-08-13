@@ -42,6 +42,10 @@ config:
   # DummyJSON prices are USD. GoshopX stores and displays product prices in VND.
   DUMMYJSON_PRICE_VND_RATE: "25000"
   PRODUCT_API: http://product:8081/products
+  AI_ENDPOINT: "https://opencode.ai/zen/go/v1/chat/completions"
+  AI_MODEL: "kimi-k2.6"
+  AI_TIMEOUT_SECONDS: "30"
+  AI_MAX_RETRIES: "2"
   # The chart mounts /tmp as an emptyDir while the container root filesystem is
   # read-only. Keep lab recommender artifacts there so its fallback service can
   # create the directory even when no trained model is available.
