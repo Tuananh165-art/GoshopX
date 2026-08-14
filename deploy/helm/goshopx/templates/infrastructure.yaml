@@ -22,6 +22,11 @@ spec:
   template:
     metadata: { labels: { app: {{ $name }} } }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: postgresql
           image: {{ if eq $name "recommender-db" }}postgres:15{{ else }}postgres:14.0{{ end }}
@@ -30,8 +35,19 @@ spec:
             - { name: POSTGRES_DB, value: goshopx }
             - { name: POSTGRES_USER, valueFrom: { secretKeyRef: { name: {{ $.Values.global.runtimeSecretName }}, key: POSTGRES_USER } } }
             - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: {{ $.Values.global.runtimeSecretName }}, key: POSTGRES_PASSWORD } } }
-          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: postgresql-run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 300m, memory: 384Mi } }
+      volumes:
+        - { name: postgresql-run, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
   volumeClaimTemplates:
     - metadata: { name: data }
       spec:
@@ -58,6 +74,9 @@ spec:
   template:
     metadata: { labels: { app: {{ $name }} } }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: {{ $name }}
           image: {{ $component.image }}
@@ -75,12 +94,37 @@ spec:
             - { name: {{ $key }}, value: {{ $value | quote }} }
           {{- end }}
           {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          {{- if eq $name "redis" }}
+            - { name: data, mountPath: /data }
+          {{- else if eq $name "product-db" }}
+            - { name: data, mountPath: /usr/share/elasticsearch/data }
+          {{- else if eq $name "minio" }}
+            - { name: data, mountPath: /data }
+          {{- else if eq $name "milvus-etcd" }}
+            - { name: data, mountPath: /etcd }
+          {{- else if eq $name "milvus-minio" }}
+            - { name: data, mountPath: /minio_data }
+          {{- else if eq $name "milvus" }}
+            - { name: data, mountPath: /var/lib/milvus }
+          {{- end }}
           {{- with $component.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- else }}
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 768Mi } }
           {{- end }}
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        {{- if has $name (list "redis" "product-db" "minio" "milvus-etcd" "milvus-minio" "milvus") }}
+        - { name: data, emptyDir: {} }
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -109,13 +153,22 @@ spec:
   template:
     metadata: { labels: { app: attu } }
     spec:
+      automountServiceAccountToken: false
+      securityContext: { seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: attu
           # Attu v2 remains compatible with the lab's Milvus 2.5 server.
           image: zilliz/attu:v2.5.12
           env: [{ name: MILVUS_URL, value: milvus:19530 }]
           ports: [{ name: http, containerPort: 3000 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 200m, memory: 256Mi } }
+      volumes: [{ name: tmp, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: Service
@@ -140,6 +193,8 @@ spec:
   template:
     metadata: { labels: { app: jaeger } }
     spec:
+      automountServiceAccountToken: false
+      securityContext: { seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: jaeger
           image: jaegertracing/all-in-one:1.68.0
@@ -147,7 +202,14 @@ spec:
             - { name: ui, containerPort: 16686 }
             - { name: otlp-grpc, containerPort: 4317 }
             - { name: otlp-http, containerPort: 4318 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 384Mi } }
+      volumes: [{ name: tmp, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: Service
@@ -174,12 +236,25 @@ spec:
   template:
     metadata: { labels: { app: kibana } }
     spec:
+      automountServiceAccountToken: false
+      securityContext: { seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: kibana
           image: docker.elastic.co/kibana/kibana-oss:6.2.4
           env: [{ name: ELASTICSEARCH_URL, value: http://product-db:9200 }]
           ports: [{ name: http, containerPort: 5601 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: data, mountPath: /usr/share/kibana/data }
+            - { name: tmp, mountPath: /tmp }
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 300m, memory: 384Mi } }
+      volumes:
+        - { name: data, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
 ---
 apiVersion: v1
 kind: Service
@@ -199,6 +274,8 @@ spec:
   template:
     metadata: { labels: { app: kafka-ui } }
     spec:
+      automountServiceAccountToken: false
+      securityContext: { seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: kafka-ui
           image: provectuslabs/kafka-ui:v0.7.2
@@ -211,7 +288,14 @@ spec:
             # memory and Netty buffers remain within the container limit.
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=50.0" }
           ports: [{ name: http, containerPort: 8080 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
           resources: { requests: { cpu: 25m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
+      volumes: [{ name: tmp, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: Service
@@ -231,11 +315,24 @@ spec:
   template:
     metadata: { labels: { app: redisinsight } }
     spec:
+      automountServiceAccountToken: false
+      securityContext: { seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: redisinsight
           image: redis/redisinsight:2.70.0
           ports: [{ name: http, containerPort: 5540 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 250m, memory: 256Mi } }
+      volumes:
+        - { name: data, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
 ---
 apiVersion: v1
 kind: Service
