@@ -59,7 +59,7 @@ jobs:
           fetch-depth: 0
       - name: Scan pushed commits for verified secrets
         if: github.event_name == 'push'
-        uses: trufflesecurity/trufflehog@v3.88.5
+        uses: trufflesecurity/trufflehog@v3.96.0
         with:
           path: ./
           base: ${{ github.event.before }}
@@ -67,7 +67,7 @@ jobs:
           extra_args: --only-verified
       - name: Scan pull request changes for verified secrets
         if: github.event_name == 'pull_request'
-        uses: trufflesecurity/trufflehog@v3.88.5
+        uses: trufflesecurity/trufflehog@v3.96.0
         with:
           path: ./
           base: ${{ github.event.pull_request.base.sha }}
@@ -75,7 +75,7 @@ jobs:
           extra_args: --only-verified
       - name: Scan repository for verified secrets
         if: github.event_name == 'workflow_dispatch'
-        uses: trufflesecurity/trufflehog@v3.88.5
+        uses: trufflesecurity/trufflehog@v3.96.0
         with:
           path: ./
           extra_args: --only-verified
