@@ -1,6 +1,7 @@
 {{- if .Values.infrastructure.enabled }}
 {{- /* The single-node lab deliberately uses one replica per dependency. */}}
 {{- $dashType := ternary "NodePort" "ClusterIP" .Values.infrastructure.dashboards.nodePort }}
+{{- $operatorNodePorts := .Values.infrastructure.nodePorts }}
 {{- range $name := list "account-db" "order-db" "payment-db" "inventory-db" "notification-db" "admin-db" "recommender-db" }}
 ---
 apiVersion: v1
@@ -85,14 +86,84 @@ apiVersion: v1
 kind: Service
 metadata: { name: {{ $name }} }
 spec:
-  type: ClusterIP
+  type: {{ if and $operatorNodePorts.enabled (has $name (list "redis" "kafka" "milvus")) }}NodePort{{ else }}ClusterIP{{ end }}
   selector: { app: {{ $name }} }
   ports:
-    - { name: tcp, port: {{ $component.port }}, targetPort: tcp }
+    - name: tcp
+      port: {{ $component.port }}
+      targetPort: tcp
+      {{- if and $operatorNodePorts.enabled (has $name (list "redis" "kafka" "milvus")) }}
+      nodePort: {{ index $operatorNodePorts $name }}
+      {{- end }}
   {{- range $extra := $component.extraPorts }}
     - { name: {{ $extra.name }}, port: {{ $extra.port }}, targetPort: {{ $extra.name }} }
   {{- end }}
 {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: attu }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: attu } }
+  template:
+    metadata: { labels: { app: attu } }
+    spec:
+      containers:
+        - name: attu
+          # Attu v2 remains compatible with the lab's Milvus 2.5 server.
+          image: zilliz/attu:v2.5.12
+          env: [{ name: MILVUS_URL, value: milvus:19530 }]
+          ports: [{ name: http, containerPort: 3000 }]
+          resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 200m, memory: 256Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: attu }
+spec:
+  type: {{ if $operatorNodePorts.enabled }}NodePort{{ else }}ClusterIP{{ end }}
+  selector: { app: attu }
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      {{- if $operatorNodePorts.enabled }}
+      nodePort: {{ $operatorNodePorts.attuUI }}
+      {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: jaeger }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: jaeger } }
+  template:
+    metadata: { labels: { app: jaeger } }
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:1.68.0
+          ports:
+            - { name: ui, containerPort: 16686 }
+            - { name: otlp-grpc, containerPort: 4317 }
+            - { name: otlp-http, containerPort: 4318 }
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 384Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: jaeger }
+spec:
+  type: {{ if $operatorNodePorts.enabled }}NodePort{{ else }}ClusterIP{{ end }}
+  selector: { app: jaeger }
+  ports:
+    - name: ui
+      port: 16686
+      targetPort: ui
+      {{- if $operatorNodePorts.enabled }}
+      nodePort: {{ $operatorNodePorts.jaegerUI }}
+      {{- end }}
+    - { name: otlp-grpc, port: 4317, targetPort: otlp-grpc }
+    - { name: otlp-http, port: 4318, targetPort: otlp-http }
 ---
 apiVersion: apps/v1
 kind: Deployment

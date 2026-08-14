@@ -13,7 +13,8 @@ server:
 ui:
   enabled: true
   service:
-    type: ClusterIP
+    type: NodePort
+    nodePort: 30700
 client:
   enabled: false
 syncCatalog:

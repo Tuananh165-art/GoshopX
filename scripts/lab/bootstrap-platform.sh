@@ -21,7 +21,8 @@ helm upgrade --install argocd argo/argo-cd --namespace argocd \
   --set server.replicas=1 --set repoServer.replicas=1 \
   --set controller.replicas=1 --set notifications.enabled=false \
   --set redis-ha.enabled=false --set redis.enabled=true \
-  --set server.service.type=ClusterIP --wait --timeout 10m
+  --set server.service.type=NodePort --set server.service.nodePortHttps=30711 \
+  --wait --timeout 10m
 
 helm upgrade --install consul hashicorp/consul --namespace consul \
   --values ops/consul/values-lab.yaml --wait --timeout 10m

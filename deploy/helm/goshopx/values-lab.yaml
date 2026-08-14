@@ -10,13 +10,21 @@ global:
     # Keep proxy/Admin/Manager ClusterIP by default. Use Traefik ingress for the
     # proxy; expose management UIs via port-forward until firewall allowlists
     # and HTTPS/operator auth are in place.
-    proxyNodePort: { enabled: false, port: 30080 }
-    managementNodePorts: { enabled: false, admin: 30081, manager: 30082 }
+    proxyNodePort: { enabled: true, port: 30708 }
+    managementNodePorts: { enabled: true, admin: 30710, manager: 30709 }
     # Kong is the public edge. Keep its memory bounded without allowing the
     # cache and worker defaults to exhaust the small lab node.
     nginxWorkerProcesses: "1"
     memCacheSize: 64m
     resources: { requests: { cpu: 75m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+  graphqlNodePort: { enabled: true, port: 30712 }
+
+infrastructure:
+  enabled: true
+  dashboards:
+    nodePort: true
+  nodePorts:
+    enabled: true
 
 # This value is updated by .github/workflows/release-gitops.yml after an image
 # is published. Use a commit SHA only; never deploy mutable `latest` in GitOps.

@@ -91,7 +91,7 @@ metadata:
   labels:
     {{- include "goshopx.labels" $ctx | nindent 4 }}
 spec:
-  type: ClusterIP
+  type: {{ if and (eq $name "graphql") $.Values.global.graphqlNodePort.enabled }}NodePort{{ else }}ClusterIP{{ end }}
   selector:
     app.kubernetes.io/instance: {{ $.Release.Name }}
     app.kubernetes.io/component: {{ $name }}
@@ -99,6 +99,9 @@ spec:
     - name: grpc
       port: {{ $service.port }}
       targetPort: grpc
+      {{- if and (eq $name "graphql") $.Values.global.graphqlNodePort.enabled }}
+      nodePort: {{ $.Values.global.graphqlNodePort.port }}
+      {{- end }}
 {{- range $extra := $service.extraPorts }}
     - name: {{ $extra.name }}
       port: {{ $extra.port }}

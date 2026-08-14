@@ -28,6 +28,9 @@ singleBinary:
     size: 5Gi
 gateway:
   enabled: true
+  service:
+    type: NodePort
+    nodePort: 30703
   replicas: 1
   resources:
     requests: { cpu: 25m, memory: 32Mi }

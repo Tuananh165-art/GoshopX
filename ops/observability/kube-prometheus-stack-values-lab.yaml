@@ -10,6 +10,9 @@ grafana:
   resources:
     requests: { cpu: 50m, memory: 96Mi }
     limits: { cpu: 250m, memory: 256Mi }
+  service:
+    type: NodePort
+    nodePort: 30702
   additionalDataSources:
     - name: Loki
       type: loki
@@ -17,6 +20,9 @@ grafana:
       url: http://loki-gateway.logging.svc.cluster.local
       isDefault: false
 prometheus:
+  service:
+    type: NodePort
+    nodePort: 30701
   prometheusSpec:
     retention: 3d
     retentionSize: 3GB

@@ -20,6 +20,9 @@ global:
     managerURL: ""
     managerAPIURL: ""
     resources: { requests: { cpu: 75m, memory: 128Mi }, limits: { cpu: 500m, memory: 384Mi } }
+  graphqlNodePort:
+    enabled: false
+    port: 30712
   networkPolicy:
     enabled: false
 
@@ -34,6 +37,15 @@ infrastructure:
     kafkaUIEnabled: true
     minioConsole: 30603
     redisInsight: 30604
+  # These ports expose non-HTTP protocols for controlled operator access.
+  # Keep disabled unless the VM firewall is restricted to trusted source IPs.
+  nodePorts:
+    enabled: false
+    redis: 30704
+    kafka: 30705
+    milvus: 30706
+    attuUI: 30707
+    jaegerUI: 30713
   storageClass: local-path
 
 image:
