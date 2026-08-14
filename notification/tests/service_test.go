@@ -116,9 +116,10 @@ func TestNotificationService_EmailContainsOrderDetails(t *testing.T) {
 	assert.Contains(t, sender.subject, "#42")
 	assert.Contains(t, sender.body, "Phone")
 	assert.Contains(t, sender.body, "Blue phone")
-	assert.Contains(t, sender.body, "300000 USD")
+	assert.Contains(t, sender.body, "300.000 ₫")
+	assert.NotContains(t, sender.body, "USD")
 	assert.Contains(t, sender.body, "Số lượng: 1")
-	assert.Contains(t, sender.body, "cod_pending")
+	assert.Contains(t, sender.body, "Thanh toán khi nhận hàng")
 	repo.AssertExpectations(t)
 }
 
@@ -155,7 +156,7 @@ func TestNotificationService_EmailsCODConfirmation(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "customer@example.com", sender.recipient)
-	assert.Contains(t, sender.body, "cod_pending")
+	assert.Contains(t, sender.body, "Thanh toán khi nhận hàng")
 	repo.AssertExpectations(t)
 }
 

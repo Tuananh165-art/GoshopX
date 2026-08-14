@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -154,10 +155,6 @@ func notificationEmail(eventType, title, message string, data any) (string, stri
 		emailTitle = fmt.Sprintf("%s - Đơn hàng #%s", title, orderID)
 	}
 
-	currency := stringValue(values["currency"])
-	if currency == "" {
-		currency = "USD"
-	}
 	var body strings.Builder
 	body.WriteString(message)
 	if eventType == "auth.password_reset_otp" {
@@ -173,17 +170,15 @@ func notificationEmail(eventType, title, message string, data any) (string, stri
 	}
 	if status := stringValue(values["status"]); status != "" {
 		body.WriteString("\nTrạng thái đơn hàng: ")
-		body.WriteString(status)
+		body.WriteString(vietnameseStatus(status))
 	}
 	if status := stringValue(values["payment_status"]); status != "" {
 		body.WriteString("\nTrạng thái thanh toán: ")
-		body.WriteString(status)
+		body.WriteString(vietnameseStatus(status))
 	}
-	if total := numberText(values["total_price"]); total != "" {
+	if total := formatVND(values["total_price"]); total != "" {
 		body.WriteString("\nTổng tiền: ")
 		body.WriteString(total)
-		body.WriteString(" ")
-		body.WriteString(currency)
 	}
 
 	if rawProducts, ok := values["products"].([]any); ok && len(rawProducts) > 0 {
@@ -199,14 +194,43 @@ func notificationEmail(eventType, title, message string, data any) (string, stri
 			body.WriteString("\n   Mô tả: ")
 			body.WriteString(stringValue(product["description"]))
 			body.WriteString("\n   Đơn giá: ")
-			body.WriteString(numberText(product["price"]))
-			body.WriteString(" ")
-			body.WriteString(currency)
+			body.WriteString(formatVND(product["price"]))
 			body.WriteString("\n   Số lượng: ")
 			body.WriteString(numberText(product["quantity"]))
 		}
 	}
 	return emailTitle, body.String()
+}
+
+func formatVND(value any) string {
+	raw := strings.TrimSpace(numberText(value))
+	if raw == "" {
+		return ""
+	}
+	amount, err := strconv.ParseInt(strings.ReplaceAll(raw, ",", ""), 10, 64)
+	if err != nil {
+		return raw + " ₫"
+	}
+	text := strconv.FormatInt(amount, 10)
+	for index := len(text) - 3; index > 0; index -= 3 {
+		text = text[:index] + "." + text[index:]
+	}
+	return text + " ₫"
+}
+
+func vietnameseStatus(status string) string {
+	switch strings.ToLower(status) {
+	case "pending":
+		return "Đang chờ xử lý"
+	case "paid", "succeeded", "success", "completed":
+		return "Đã thanh toán"
+	case "cod_pending":
+		return "Thanh toán khi nhận hàng"
+	case "failed":
+		return "Thanh toán thất bại"
+	default:
+		return status
+	}
 }
 
 func stringValue(value any) string {
@@ -242,15 +266,15 @@ func notificationCopy(eventType string) (string, string) {
 	case "auth.password_reset_otp":
 		return "Mã OTP đổi mật khẩu", "Bạn vừa yêu cầu đổi mật khẩu. Dùng mã OTP bên dưới để tiếp tục."
 	case "payment.succeeded":
-		return "Payment successful", "Your payment was completed successfully."
+		return "Thanh toán thành công", "Thanh toán đơn hàng của bạn đã được xác nhận thành công."
 	case "payment.failed":
-		return "Payment failed", "Your payment failed. Please try checkout again."
+		return "Thanh toán thất bại", "Thanh toán chưa thành công. Vui lòng thử lại hoặc chọn phương thức khác."
 	case "order.created":
-		return "Order created", "Your order has been created and is waiting for payment."
+		return "Đơn hàng đã được tạo", "Đơn hàng của bạn đã được tạo và đang chờ thanh toán."
 	case "order.cod_created":
 		return "Đặt đơn COD thành công", "Đơn COD của bạn đã được tiếp nhận và đang chờ thu tiền."
 	case "order.payment_status_updated":
-		return "Order updated", "Your order payment status was updated."
+		return "Cập nhật thanh toán đơn hàng", "Trạng thái thanh toán đơn hàng của bạn vừa được cập nhật."
 	case "inventory.released":
 		return "Reservation released", "A reserved item was released back to stock."
 	case "inventory.committed":
