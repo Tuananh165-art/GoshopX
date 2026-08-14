@@ -55,6 +55,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
           image-ref: ghcr.io/${{ vars.GHCR_OWNER }}/goshopx-${{ matrix.service }}:${{ github.sha }}
           format: table
