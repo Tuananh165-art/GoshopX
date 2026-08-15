@@ -79,9 +79,26 @@ spec:
   template:
     metadata: { labels: { app: {{ $name }} } }
     spec:
+      automountServiceAccountToken: false
+      {{- if eq $name "kafka" }}
+      # Apache Kafka already runs as appuser (1000) in this image.  Declare
+      # that fact so admission/security scanners do not have to trust the
+      # image default.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      {{- end }}
       containers:
         - name: {{ $name }}
           image: {{ $component.image }}
+          {{- if eq $name "kafka" }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          {{- end }}
           {{- with $component.command }}
           command: {{ toYaml . | nindent 12 }}
           {{- end }}
@@ -130,6 +147,7 @@ spec:
   template:
     metadata: { labels: { app: attu } }
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: attu
           # Attu v2 remains compatible with the lab's Milvus 2.5 server.
@@ -161,9 +179,21 @@ spec:
   template:
     metadata: { labels: { app: jaeger } }
     spec:
+      automountServiceAccountToken: false
+      # jaegertracing/all-in-one uses uid 10001; it needs no writable host
+      # path in the lab's in-memory-storage mode.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: jaeger
           image: jaegertracing/all-in-one:1.68.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
           ports:
             - { name: ui, containerPort: 16686 }
             - { name: otlp-grpc, containerPort: 4317 }
@@ -195,9 +225,19 @@ spec:
   template:
     metadata: { labels: { app: kibana } }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: kibana
           image: docker.elastic.co/kibana/kibana-oss:6.2.4
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
           env: [{ name: ELASTICSEARCH_URL, value: http://product-db:9200 }]
           ports: [{ name: http, containerPort: 5601 }]
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 300m, memory: 384Mi } }
@@ -220,9 +260,19 @@ spec:
   template:
     metadata: { labels: { app: kafka-ui } }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: kafka-ui
           image: provectuslabs/kafka-ui:v0.7.2
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
           env:
             - { name: DYNAMIC_CONFIG_ENABLED, value: "false" }
             - { name: KAFKA_CLUSTERS_0_NAME, value: goshopx-lab }
@@ -252,9 +302,19 @@ spec:
   template:
     metadata: { labels: { app: redisinsight } }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: redisinsight
           image: redis/redisinsight:2.70.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
           ports: [{ name: http, containerPort: 5540 }]
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 250m, memory: 256Mi } }
 ---
