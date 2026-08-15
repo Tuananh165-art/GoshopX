@@ -73,13 +73,13 @@ Key groups:
 - Admin reporting: `ADMIN_DATABASE_URL`, `ADMIN_SERVICE_URL`, `ADMIN_EVENTS_TOPIC`
 - Infra: Kafka, Redis, MinIO (`MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `MINIO_PUBLIC_URL`)
 - Auth: `SECRET_KEY`, `ISSUER`
-- Payments: `DODO_API_KEY`, `DODO_WEBHOOK_SECRET`, `DODO_CHECKOUT_URL`, `DODO_TEST_MODE`
+- Payments: `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_PAYMENT_URL` for the VNPay Sandbox flow; keep any provider-specific credentials only in local/runtime secrets.
 - DummyJSON catalog seed: `DUMMYJSON_BASE_URL`, `DUMMYJSON_SEED_ENABLED`, `DUMMYJSON_SEED_LIMIT`
 - Admin governance: `ADMIN_EVENTS_TOPIC`; roles and account status are owned by `account`
 
 `docker-compose.yaml` reads these values with local-safe defaults, so you can override only what you need.
 
-Google Login and Gmail notification setup is documented in [docs/21-google-login-gmail-notifications.md](./docs/21-google-login-gmail-notifications.md). Google Login uses a Web OAuth client ID; Gmail delivery uses SMTP with a Gmail App Password.
+Google Login and Gmail notification setup is documented in [docs/21-google-login-gmail-notifications.md](./docs/21-google-login-gmail-notifications.md). Google Login uses a Web OAuth client ID; Gmail delivery uses SMTP with a Gmail App Password. For the deployed lab, the JavaScript origin must exactly be `https://goshopx.click`; quote SMTP passwords containing spaces in the shell-sourced runtime secret. See [current K3s operations](./docs/26-k3s-lab-current-operations.md).
 
 ### DummyJSON product catalog
 
@@ -152,16 +152,18 @@ private `ClusterIP` Services. GitHub Actions builds/scans immutable GHCR images,
 promotes the image SHA in Git, and Argo CD reconciles Git into K3s. GitHub
 Actions does not receive a cluster kubeconfig.
 
-For Ubuntu 22.04/24.04 VPS deployment, follow the complete Vietnamese guide:
+For Ubuntu 22.04/24.04 VPS deployment, follow the complete deployment guide:
 
 - [Ubuntu K3s step-by-step deployment](./docs/23-ubuntu-k3s-step-by-step-deployment.md)
 - [Ubuntu deployment scripts](./scripts/ubuntu/README.md)
 - [K3s DevSecOps lab runbook](./docs/22-devsecops-k3s-lab-runbook.md)
 
-The 8 GB / 50 GB profile must be deployed in phases. Start with core commerce;
-enable infrastructure, Milvus, recommender training and extra dashboards only
-after measuring RAM/disk headroom. Operator UIs are ClusterIP by default; use
-`kubectl port-forward` rather than public NodePorts.
+The lab must be deployed in phases. The current single-node installation can
+expose a narrowly allowlisted set of operator NodePorts (Grafana, Prometheus,
+Argo CD, Jaeger, Kibana, Kafka UI, Attu and RedisInsight); keep data protocols
+and Kong Admin private. Do not use the public app domain/Cloudflare proxy for
+arbitrary NodePorts. See [NodePort operator access](./docs/24-operator-dashboard-nodeport-runbook.md) and
+[current K3s operations](./docs/26-k3s-lab-current-operations.md).
 
 ## Local Runtime Notes
 
@@ -178,4 +180,4 @@ after measuring RAM/disk headroom. Operator UIs are ClusterIP by default; use
 
 ## Documentation
 
-Start with [docs/00-index.md](./docs/00-index.md). The docs set includes BMAD process, Scrum delivery, architecture decisions, core-commerce specs, and runtime configuration notes.
+Start with [docs/00-index.md](./docs/00-index.md). The docs set includes BMAD process, Scrum delivery, architecture decisions, core-commerce specs, runtime configuration notes, the current K3s operations runbook, NodePort access, and observability evidence.

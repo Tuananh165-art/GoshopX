@@ -1,55 +1,56 @@
-# Hướng dẫn triển khai GoshopX lên Ubuntu K3s
+# Deploying GoshopX to Ubuntu K3s
 
-Tài liệu này là quy trình vận hành cho một VPS Ubuntu 22.04/24.04, 8 GB RAM,
-50 GB disk. Nó dùng các script trong `scripts/ubuntu/`; không thay thế GitOps
-và không ghi secret vào Git.
+This document is the operating procedure for an Ubuntu 22.04/24.04 VPS with
+8 GB RAM and a 50 GB disk. It uses the scripts in scripts/ubuntu/; it does
+not replace GitOps and does not store secrets in Git.
 
-## 1. Kiến trúc đích và giới hạn
+## 1. Target architecture and constraints
 
-```text
+~~~text
 Internet -> Traefik (K3s Ingress) -> Kong proxy -> Web / GraphQL / payment webhook
                                                 -> gRPC services (ClusterIP only)
                                                 -> Kafka, Redis, PostgreSQL, Elasticsearch, MinIO, Milvus
 GitHub Actions -> GHCR immutable SHA -> Git values -> Argo CD -> K3s
-```
+~~~
 
-Kong là API gateway; Traefik chỉ là ingress controller. Browser chỉ gọi Kong
-vào Web/GraphQL. gRPC, PostgreSQL, Kafka, Redis, Elasticsearch, MinIO và Milvus
-không được expose public. Kong Admin/Manager và toàn bộ dashboard kỹ thuật là
-`ClusterIP` mặc định; dùng `port-forward` cho operator.
+Kong is the API gateway; Traefik is only the ingress controller. Browsers call
+Kong only for Web/GraphQL. gRPC, PostgreSQL, Kafka, Redis, Elasticsearch, MinIO,
+and Milvus must not be publicly exposed. Kong Admin/Manager and all technical
+dashboards are ClusterIP by default; operators should use port-forward.
 
-Một node 8 GB không có HA. Triển khai theo phase:
+An 8 GB single-node environment has no HA. Deploy in phases:
 
-| Phase | Bật | Không bật ngay |
+| Phase | Enable | Do not enable immediately |
 | --- | --- | --- |
-| 0 | K3s, Kong, Web, GraphQL, core service và backing services bắt buộc | Milvus, recommender, admin, Kibana, dashboard UI |
-| 1 | Argo CD, Consul catalog sync | Consul Connect sidecar/mesh |
-| 2 | Prometheus, Grafana, Loki/Alloy | retention dài, alertmanager HA |
-| 3 | k6 theo job | k6 chạy liên tục |
+| 0 | K3s, Kong, Web, GraphQL, core services, and required backing services | Milvus, recommender, admin, Kibana, dashboard UIs |
+| 1 | Argo CD and Consul catalog sync | Consul Connect sidecar/mesh |
+| 2 | Prometheus, Grafana, Loki/Alloy | Long retention and Alertmanager HA |
+| 3 | k6 as a job | Continuously running k6 |
 
-## 2. Chuẩn bị DNS, firewall và repository
+## 2. Prepare DNS, firewall, and repository
 
-1. Tạo DNS A record `<APP_HOST>` trỏ đến IP VPS.
-2. Firewall/security group chỉ cho phép TCP `22`, `80`, `443`. Không mở `6443`,
-   NodePort range, Kong `8001/8002`, Grafana, Prometheus hay Argo CD.
-3. Đăng nhập VPS bằng user có `sudo`, clone repository rồi vào thư mục checkout.
+1. Create a DNS A record mapping <APP_HOST> to the VPS IP address.
+2. Allow only TCP 22, 80, and 443 in the firewall/security group. Do not open
+   6443, the NodePort range, Kong 8001/8002, Grafana, Prometheus, or Argo CD.
+3. Sign in to the VPS with a user that has sudo, clone the repository, and
+   enter the checkout directory.
 
-```bash
+~~~bash
 git clone https://github.com/OWNER/GoshopX.git
 cd GoshopX
 chmod +x scripts/ubuntu/*.sh scripts/lab/*.sh
 ./scripts/ubuntu/00-host-prerequisites.sh
-```
+~~~
 
-Không chạy script bằng `sudo`; script chỉ gọi `sudo` cho thao tác hệ thống cần
-thiết. Kiểm tra `free -h` và `df -h` trước mỗi phase.
+Do not run the scripts with sudo; scripts invoke sudo only for required system
+operations. Check free -h and df -h before every phase.
 
-## 3. Cài K3s và CLI
+## 3. Install K3s and CLI tools
 
-Chọn một version K3s đã review; script yêu cầu biến này để tránh cài “latest”
-không kiểm soát.
+Choose a reviewed K3s version. The script requires this variable to avoid
+installing an uncontrolled latest version.
 
-```bash
+~~~bash
 export K3S_VERSION='v1.31.4+k3s1'
 ./scripts/ubuntu/01-install-k3s.sh
 export HELM_VERSION='v3.16.4'
@@ -57,128 +58,134 @@ export ARGOCD_VERSION='v2.13.3'
 ./scripts/ubuntu/02-install-cli-tools.sh
 kubectl get nodes
 helm version --short
-```
+~~~
 
-K3s được cài single-server, giữ Traefik, tắt `servicelb` và `metrics-server`,
-đặt image garbage collection 70/55. `~/.kube/config` là credential quản trị;
-không commit hoặc đưa file này vào GitHub Actions.
+K3s is installed as a single server, keeps Traefik, disables servicelb and
+metrics-server, and configures image garbage collection at 70/55.
+~/.kube/config is an administrative credential; do not commit it or put it
+in GitHub Actions.
 
-## 4. Cấu hình GitOps trước deploy
+## 4. Configure GitOps before deployment
 
-Sửa có review các placeholder trong:
+Review and replace placeholders in:
 
-- `deploy/helm/goshopx/values-lab.yaml`: `global.imageRegistry`, `image.tag`,
-  `global.ingress.host`, các service enable theo phase.
-- `ops/gitops/argocd/applications/goshopx-lab.yaml`: repository URL và GHCR owner.
+- deploy/helm/goshopx/values-lab.yaml: global.imageRegistry, image.tag,
+  global.ingress.host, and service enablement for the current phase.
+- ops/gitops/argocd/applications/goshopx-lab.yaml: repository URL and GHCR owner.
 
-`image.tag` phải là commit SHA đã tồn tại trong GHCR; không dùng `latest`.
-Trong GitHub repo, tạo variable `GHCR_OWNER`, bật GitHub Environment `lab` có
-reviewer, bảo vệ branch `main`, và yêu cầu CI quality gates pass.
+image.tag must be a commit SHA that exists in GHCR; never use latest.
+In the GitHub repository, create the GHCR_OWNER variable, enable a GitHub
+Environment named lab with reviewers, protect the main branch, and require
+passing CI quality gates.
 
-## 5. Tạo secret runtime ngoài Git
+## 5. Create the runtime secret outside Git
 
-Tạo file ở vị trí an toàn ngoài checkout, chẳng hạn `/opt/goshopx/secrets.env`:
+Create a file in a protected location outside the checkout, for example
+/opt/goshopx/secrets.env:
 
-```bash
+~~~bash
 sudo install -d -m 0700 /opt/goshopx
 sudo cp scripts/ubuntu/goshopx-secrets.env.example /opt/goshopx/secrets.env
 sudo chown "$USER":"$USER" /opt/goshopx/secrets.env
 chmod 600 /opt/goshopx/secrets.env
 nano /opt/goshopx/secrets.env
 ./scripts/ubuntu/03-create-runtime-secret.sh /opt/goshopx/secrets.env
-```
+~~~
 
-Điền giá trị thật, không giữ literal `replace`. Mỗi service owner cần URL
-database riêng. Với infrastructure nội bộ chart, hostname lần lượt là
-`account-db`, `order-db`, `payment-db`, `inventory-db`, `notification-db`,
-`admin-db`, `recommender-db`; Product dùng `http://product-db:9200`.
+Provide real values and do not retain literal replace placeholders. Each
+service owner requires a separate database URL. For chart-managed internal
+infrastructure, hostnames are account-db, order-db, payment-db, inventory-db,
+notification-db, admin-db, and recommender-db; Product uses
+http://product-db:9200.
 
-## 6. Bootstrap Argo CD, Consul và observability
+## 6. Bootstrap Argo CD, Consul, and observability
 
-```bash
+~~~bash
 export GRAFANA_ADMIN_PASSWORD='set-a-unique-password-in-your-shell-only'
 export GITOPS_REPO_URL='https://github.com/OWNER/GoshopX.git'
 export GHCR_IMAGE_REGISTRY='ghcr.io/OWNER'
 ./scripts/ubuntu/04-bootstrap-platform.sh
 unset GRAFANA_ADMIN_PASSWORD
-```
+~~~
 
-Argo CD, Consul single-server/catalog sync, Prometheus, Grafana, Loki và Alloy
-được cài vào namespace riêng. Không coi việc Helm `--wait` pass là xác nhận DNS,
-TLS hoặc public reachability.
+Argo CD, single-server Consul/catalog sync, Prometheus, Grafana, Loki, and Alloy
+are installed into separate namespaces. A successful Helm --wait does not
+confirm DNS, TLS, or public reachability.
 
-## 7. Build và publish images
+## 7. Build and publish images
 
-Đường chuẩn: push vào `main`; GitHub Actions test, scan, build các image và
-promote SHA vào Git. Không cấp kubeconfig cho CI.
+The standard path is to push to main: GitHub Actions tests, scans, builds the
+images, and promotes the SHA to Git. Do not grant CI a kubeconfig.
 
-Chỉ khi cần build thủ công trên builder tin cậy:
+Build manually only when necessary on a trusted builder:
 
-```bash
+~~~bash
 export GHCR_IMAGE_REGISTRY='ghcr.io/OWNER'
 export IMAGE_TAG="$(git rev-parse HEAD)"
 export REGISTRY_USERNAME='github-user-or-bot'
 read -rsp 'GHCR token: ' REGISTRY_TOKEN; echo
 ./scripts/ubuntu/08-build-and-push-images.sh
 unset REGISTRY_TOKEN
-```
+~~~
 
-Sau đó commit/push image tag vào `values-lab.yaml` để Argo CD nhìn thấy desired
-state. Không dùng manual Helm deploy như đường release thường xuyên sau GitOps
-bootstrap.
+Then commit and push the image tag to values-lab.yaml so Argo CD can observe
+the desired state. Do not use manual Helm deployment as the routine release
+path after GitOps bootstrap.
 
-## 8. Deploy ứng dụng lần đầu
+## 8. Deploy the application for the first time
 
-Chạy profile nhẹ trước. `ENABLE_INFRA=true` deploy dependency image profile và
-7 PostgreSQL PVC 2 GiB; chỉ bật sau khi kiểm tra headroom.
+Start with the lightweight profile. ENABLE_INFRA=true deploys the dependency
+image profile and seven 2 GiB PostgreSQL PVCs; enable it only after confirming
+resource headroom.
 
-```bash
+~~~bash
 export GHCR_IMAGE_REGISTRY='ghcr.io/OWNER'
 export IMAGE_TAG='COMMIT_SHA_FROM_GHCR'
 export INGRESS_HOST='<APP_HOST>'
 export TLS_SECRET_NAME='<EXISTING_TLS_SECRET>'
 export ENABLE_INFRA=false
 ./scripts/ubuntu/05-deploy-application.sh
-```
+~~~
 
-Khi backing services đã sẵn sàng và measured capacity đủ, dùng
-`ENABLE_INFRA=true`. Trước khi bật Milvus/recommender/admin/Kibana, set các
-service tương ứng `enabled: true` trong `values-lab.yaml`, commit để Argo CD
-reconcile. Không bật NodePort dashboard trừ lab có firewall allowlist:
-`ENABLE_NODEPORT_DASHBOARDS=true`.
+When backing services are ready and measured capacity is sufficient, use
+ENABLE_INFRA=true. Before enabling Milvus, recommender, admin, or Kibana, set
+the relevant services to enabled: true in values-lab.yaml and commit so Argo CD
+can reconcile. Do not enable NodePort dashboards unless the lab has a firewall
+allowlist: ENABLE_NODEPORT_DASHBOARDS=true.
 
-## 9. Verify và vận hành
+## 9. Verify and operate
 
-```bash
+~~~bash
 ./scripts/ubuntu/06-verify-release.sh
 kubectl -n goshopx get pods,svc
 kubectl -n argocd get applications.argoproj.io goshopx-lab
 kubectl -n goshopx port-forward svc/kong-manager 8002:8002
-```
+~~~
 
-Kiểm tra từ máy operator: `https://<APP_HOST>/health`, `POST /graphql`, Argo app
-status `Synced/Healthy`, Prometheus targets, Grafana Loki datasource và k6
-smoke test. Payment webhook chỉ được test bằng event sandbox đã ký hợp lệ.
+From an operator workstation, verify https://<APP_HOST>/health, POST /graphql,
+Argo application status Synced/Healthy, Prometheus targets, the Grafana Loki
+data source, and a k6 smoke test. Test payment webhooks only with valid signed
+sandbox events.
 
-## 10. Rollback và sự cố thường gặp
+## 10. Rollback and common incidents
 
-Rollback chuẩn là revert commit promotion GitOps và chờ Argo sync. Chỉ khi cần
-khôi phục khẩn cấp:
+The standard rollback is to revert the GitOps promotion commit and wait for
+Argo synchronization. Use an emergency recovery only when required:
 
-```bash
+~~~bash
 helm history goshopx -n goshopx
 ./scripts/ubuntu/07-rollback-application.sh REVISION
-```
+~~~
 
-- `ImagePullBackOff`: kiểm tra image SHA có trong GHCR và quyền pull/imagePullSecret.
-- `Pending` PVC: kiểm tra `kubectl get storageclass,pvc -A`; K3s cần `local-path`.
-- Elasticsearch crash: kiểm tra `vm.max_map_count` của host và RAM; không bật
-  cùng Milvus/recommender trên node khi thiếu headroom.
-- Kong 502: kiểm tra `kubectl -n goshopx get endpoints kong-proxy graphql payment`;
-  Product/Payment 8081 là internal HTTP, không phải public gRPC.
+- ImagePullBackOff: verify the image SHA exists in GHCR and check pull permission/imagePullSecret.
+- Pending PVC: inspect kubectl get storageclass,pvc -A; K3s needs local-path.
+- Elasticsearch crash: check host vm.max_map_count and RAM; do not enable it
+  with Milvus/recommender on a node without sufficient headroom.
+- Kong 502: inspect kubectl -n goshopx get endpoints kong-proxy graphql payment;
+  Product/Payment port 8081 is internal HTTP, not public gRPC.
 
-## Trạng thái verification
+## Verification status
 
-Scripts đã được kiểm tra cú pháp Bash; chart đã Helm lint/render. K3s install,
-DNS, TLS, GHCR permissions, image pull, Pod readiness và HTTP public phải được
-kiểm tra lại trên VPS thực tế.
+The scripts have been checked for Bash syntax and the chart has passed Helm
+lint/render. K3s installation, DNS, TLS, GHCR permissions, image pulls, pod
+readiness, and public HTTP must be verified again on the real VPS.
