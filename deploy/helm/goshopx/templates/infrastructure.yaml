@@ -67,7 +67,7 @@ spec:
   "minio" (dict "image" "minio/minio:RELEASE.2025-04-22T22-12-26Z" "port" 9000 "command" (list "minio" "server" "/data" "--console-address" ":9001"))
   "milvus-etcd" (dict "image" "quay.io/coreos/etcd:v3.5.18" "port" 2379 "command" (list "etcd" "--advertise-client-urls=http://milvus-etcd:2379" "--listen-client-urls=http://0.0.0.0:2379" "--data-dir" "/etcd"))
   "milvus-minio" (dict "image" "minio/minio:RELEASE.2025-04-22T22-12-26Z" "port" 9000 "command" (list "minio" "server" "/minio_data"))
-  "milvus" (dict "image" "milvusdb/milvus:v2.5.10" "port" 19530 "command" (list "milvus" "run" "standalone") "env" (dict "ETCD_ENDPOINTS" "milvus-etcd:2379" "MINIO_ADDRESS" "milvus-minio:9000"))
+  "milvus" (dict "image" "milvusdb/milvus:v2.5.10" "port" 19530 "command" (list "/milvus/bin/milvus" "run" "standalone") "env" (dict "ETCD_ENDPOINTS" "milvus-etcd:2379" "MINIO_ADDRESS" "milvus-minio:9000"))
  }}
 {{- with $persistence := $component.persistence }}
 ---
@@ -102,6 +102,15 @@ spec:
           emptyDir: {}
         {{- if eq $name "redis" }}
         - name: redis-data
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $name "kafka" }}
+        # Apache Kafka generates effective configuration and writes segment
+        # data at startup. Both locations must remain writable with a
+        # read-only root filesystem.
+        - name: kafka-config
+          emptyDir: {}
+        - name: kafka-logs
           emptyDir: {}
         {{- end }}
         {{- if eq $name "minio" }}
@@ -139,6 +148,12 @@ spec:
             {{- if eq $name "redis" }}
             - name: redis-data
               mountPath: /data
+            {{- end }}
+            {{- if eq $name "kafka" }}
+            - name: kafka-config
+              mountPath: /opt/kafka/config
+            - name: kafka-logs
+              mountPath: /tmp/kafka-logs
             {{- end }}
             {{- if eq $name "minio" }}
             - name: minio-data
@@ -219,6 +234,9 @@ spec:
       volumes:
         - name: runtime
           emptyDir: {}
+        # Attu writes its generated browser configuration during startup.
+        - name: attu-build
+          emptyDir: {}
       containers:
         - name: attu
           # Attu v2 remains compatible with the lab's Milvus 2.5 server.
@@ -231,6 +249,8 @@ spec:
           volumeMounts:
             - name: runtime
               mountPath: /tmp
+            - name: attu-build
+              mountPath: /app/build
           env: [{ name: MILVUS_URL, value: milvus:19530 }]
           ports: [{ name: http, containerPort: 3000 }]
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 200m, memory: 256Mi } }
@@ -326,6 +346,9 @@ spec:
           emptyDir: {}
         - name: kibana-data
           emptyDir: {}
+        # Kibana 6 creates a Babel cache under optimize on first boot.
+        - name: kibana-optimize
+          emptyDir: {}
       containers:
         - name: kibana
           image: docker.elastic.co/kibana/kibana-oss:6.2.4
@@ -339,6 +362,8 @@ spec:
               mountPath: /tmp
             - name: kibana-data
               mountPath: /usr/share/kibana/data
+            - name: kibana-optimize
+              mountPath: /usr/share/kibana/optimize
           env: [{ name: ELASTICSEARCH_URL, value: http://product-db:9200 }]
           ports: [{ name: http, containerPort: 5601 }]
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 300m, memory: 384Mi } }
