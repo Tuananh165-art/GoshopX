@@ -90,8 +90,20 @@ spec:
     metadata: { labels: { app: {{ $name }} } }
     spec:
       automountServiceAccountToken: false
+      {{- if eq $name "redis" }}
+      # The official Redis image includes the redis user/group at UID/GID 999.
+      # Declare it explicitly: relying on the image's root entrypoint causes
+      # KSV-0118, even though the Redis process can safely run as this user.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      {{- end }}
       {{- if eq $name "kafka" }}
-      # Apache Kafka already runs as appuser (1000) in this image.  Declare
+      # Apache Kafka already runs as appuser (1000) in this image. Declare
       # that fact so admission/security scanners do not have to trust the
       # image default.
       securityContext:
@@ -120,6 +132,12 @@ spec:
       containers:
         - name: {{ $name }}
           image: {{ $component.image }}
+          {{- if eq $name "redis" }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          {{- end }}
           {{- if eq $name "kafka" }}
           securityContext:
             allowPrivilegeEscalation: false
