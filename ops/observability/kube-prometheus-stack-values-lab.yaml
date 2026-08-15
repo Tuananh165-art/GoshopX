@@ -8,8 +8,21 @@ grafana:
     enabled: true
     size: 2Gi
   resources:
-    requests: { cpu: 50m, memory: 96Mi }
-    limits: { cpu: 250m, memory: 256Mi }
+    # Grafana 13 provisions dashboards and plugins during startup. The
+    # previous 250m/256Mi limit caused /api/health to time out and removed the
+    # pod from its NodePort Service.
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  readinessProbe:
+    initialDelaySeconds: 30
+    timeoutSeconds: 10
+    periodSeconds: 10
+    failureThreshold: 12
+  livenessProbe:
+    initialDelaySeconds: 90
+    timeoutSeconds: 10
+    periodSeconds: 10
+    failureThreshold: 6
   service:
     type: NodePort
     nodePort: 30702
