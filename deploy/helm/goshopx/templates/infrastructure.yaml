@@ -112,6 +112,9 @@ spec:
           emptyDir: {}
         - name: kafka-logs
           emptyDir: {}
+        # Kafka writes JVM GC logs beneath its installation root.
+        - name: kafka-jvm-logs
+          emptyDir: {}
         {{- end }}
         {{- if eq $name "minio" }}
         - name: minio-data
@@ -154,6 +157,8 @@ spec:
               mountPath: /opt/kafka/config
             - name: kafka-logs
               mountPath: /tmp/kafka-logs
+            - name: kafka-jvm-logs
+              mountPath: /opt/kafka/logs
             {{- end }}
             {{- if eq $name "minio" }}
             - name: minio-data
@@ -234,23 +239,19 @@ spec:
       volumes:
         - name: runtime
           emptyDir: {}
-        # Attu writes its generated browser configuration during startup.
-        - name: attu-build
-          emptyDir: {}
       containers:
         - name: attu
           # Attu v2 remains compatible with the lab's Milvus 2.5 server.
           image: zilliz/attu:v2.5.12
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            # Attu updates /app/build/env-config.js at startup. Do not mount
+            # an emptyDir on /app/build because that hides image-provided env.sh.
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
           volumeMounts:
             - name: runtime
               mountPath: /tmp
-            - name: attu-build
-              mountPath: /app/build
           env: [{ name: MILVUS_URL, value: milvus:19530 }]
           ports: [{ name: http, containerPort: 3000 }]
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 200m, memory: 256Mi } }
