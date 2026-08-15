@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"github.com/Tuananh165art/GoshopX/product/models"
 	"github.com/Tuananh165art/GoshopX/product/proto/pb"
 )
@@ -57,7 +58,7 @@ func ListenGRPC(s Service, port int) error {
 	if err != nil {
 		return err
 	}
-	serv := grpc.NewServer()
+	serv := grpc.NewServer(observability.GRPCServerOptions("product")...)
 
 	pb.RegisterProductServiceServer(serv, &grpcServer{
 		UnimplementedProductServiceServer: pb.UnimplementedProductServiceServer{},

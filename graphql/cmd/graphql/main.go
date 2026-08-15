@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -9,10 +10,18 @@ import (
 	"github.com/Tuananh165art/GoshopX/graphql/config"
 	"github.com/Tuananh165art/GoshopX/graphql/graph"
 	"github.com/Tuananh165art/GoshopX/pkg/middleware"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	shutdownTracing, traceErr := observability.ConfigureTracing(context.Background(), "graphql")
+	if traceErr != nil {
+		log.Printf("OpenTelemetry tracing disabled: %v", traceErr)
+	} else {
+		defer func() { _ = shutdownTracing(context.Background()) }()
+	}
+	observability.StartMetricsServer(9090)
 	server, err := graph.NewGraphQLServer(
 		config.AccountUrl,
 		config.ProductUrl,
@@ -34,7 +43,7 @@ func main() {
 
 	engine := gin.Default()
 
-	engine.Use(middleware.GinContextToContextMiddleware(), middleware.CaptureClientIP())
+	engine.Use(observability.GinMiddleware("graphql"), middleware.GinContextToContextMiddleware(), middleware.CaptureClientIP())
 
 	engine.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{

@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/Tuananh165art/GoshopX/account/proto/pb"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -21,7 +22,7 @@ func ListenGRPC(service Service, port int) error {
 	if err != nil {
 		return err
 	}
-	serv := grpc.NewServer()
+	serv := grpc.NewServer(observability.GRPCServerOptions("account")...)
 
 	pb.RegisterAccountServiceServer(serv, &grpcServer{
 		UnimplementedAccountServiceServer: pb.UnimplementedAccountServiceServer{},

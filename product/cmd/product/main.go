@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"github.com/Tuananh165art/GoshopX/product/config"
 	"github.com/tinrab/retry"
 
@@ -16,6 +17,13 @@ import (
 )
 
 func main() {
+	shutdownTracing, traceErr := observability.ConfigureTracing(context.Background(), "product")
+	if traceErr != nil {
+		log.Printf("OpenTelemetry tracing disabled: %v", traceErr)
+	} else {
+		defer func() { _ = shutdownTracing(context.Background()) }()
+	}
+	observability.StartMetricsServer(9090)
 	var repository internal.Repository
 
 	var producer sarama.AsyncProducer

@@ -58,3 +58,12 @@ config:
   # read-only. Keep lab recommender artifacts there so its fallback service can
   # create the directory even when no trained model is available.
   ARTIFACTS_LOCAL_PATH: /tmp/artifacts
+
+observability:
+  metricsPort: 9090
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+  tracing:
+    # Jaeger collector OTLP/gRPC service within the goshopx namespace.
+    otlpEndpoint: jaeger:4317

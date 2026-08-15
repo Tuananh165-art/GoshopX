@@ -1,18 +1,27 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/Tuananh165art/GoshopX/order/config"
 	"github.com/Tuananh165art/GoshopX/order/internal"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"github.com/tinrab/retry"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
+	shutdownTracing, traceErr := observability.ConfigureTracing(context.Background(), "order")
+	if traceErr != nil {
+		log.Printf("OpenTelemetry tracing disabled: %v", traceErr)
+	} else {
+		defer func() { _ = shutdownTracing(context.Background()) }()
+	}
+	observability.StartMetricsServer(9090)
 	var repository internal.Repository
 
 	producer, err := sarama.NewAsyncProducer([]string{config.BootstrapServers}, nil)

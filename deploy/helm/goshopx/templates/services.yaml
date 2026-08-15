@@ -44,6 +44,10 @@ spec:
           ports:
             - name: grpc
               containerPort: {{ $service.port }}
+          {{- if $service.metricsEnabled }}
+            - name: metrics
+              containerPort: {{ $.Values.observability.metricsPort }}
+          {{- end }}
           {{- range $extra := $service.extraPorts }}
             - name: {{ $extra.name }}
               containerPort: {{ $extra.port }}
@@ -54,15 +58,17 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "goshopx.name" $ }}-config
-          {{- if $service.secretKeys }}
           env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.observability.tracing.otlpEndpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ printf "goshopx-%s" $name | quote }}
           {{- range $envName, $secretKey := $service.secretKeys }}
             - name: {{ $envName }}
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.global.runtimeSecretName }}
                   key: {{ $secretKey }}
-          {{- end }}
           {{- end }}
           resources:
             {{- toYaml $service.resources | nindent 12 }}
@@ -102,10 +108,34 @@ spec:
       {{- if and (eq $name "graphql") $.Values.global.graphqlNodePort.enabled }}
       nodePort: {{ $.Values.global.graphqlNodePort.port }}
       {{- end }}
+{{- if $service.metricsEnabled }}
+    - name: metrics
+      port: {{ $.Values.observability.metricsPort }}
+      targetPort: metrics
+{{- end }}
 {{- range $extra := $service.extraPorts }}
     - name: {{ $extra.name }}
       port: {{ $extra.port }}
       targetPort: {{ $extra.name }}
+{{- end }}
+{{- if and $service.metricsEnabled $.Values.observability.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "goshopx.fullname" $ctx }}
+  labels:
+    release: kube-prometheus-stack
+    {{- include "goshopx.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ $.Values.observability.serviceMonitor.interval | quote }}
 {{- end }}
 {{- end }}
 {{- end }}

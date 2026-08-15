@@ -8,6 +8,7 @@ import (
 
 	"github.com/Tuananh165art/GoshopX/inventory/models"
 	"github.com/Tuananh165art/GoshopX/inventory/proto/pb"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -23,7 +24,7 @@ func ListenGRPC(service Service, port int) error {
 		return err
 	}
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(observability.GRPCServerOptions("inventory")...)
 	pb.RegisterInventoryServiceServer(server, &grpcServer{
 		UnimplementedInventoryServiceServer: pb.UnimplementedInventoryServiceServer{},
 		service:                             service,

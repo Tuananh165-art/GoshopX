@@ -1,15 +1,24 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/IBM/sarama"
 	"github.com/Tuananh165art/GoshopX/cart/config"
 	"github.com/Tuananh165art/GoshopX/cart/internal"
 	inventory "github.com/Tuananh165art/GoshopX/inventory/client"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 )
 
 func main() {
+	shutdownTracing, traceErr := observability.ConfigureTracing(context.Background(), "cart")
+	if traceErr != nil {
+		log.Printf("OpenTelemetry tracing disabled: %v", traceErr)
+	} else {
+		defer func() { _ = shutdownTracing(context.Background()) }()
+	}
+	observability.StartMetricsServer(9090)
 	repository, err := internal.NewRedisRepository(config.RedisURL)
 	if err != nil {
 		log.Fatal(err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"github.com/Tuananh165art/GoshopX/product/models"
 	"github.com/Tuananh165art/GoshopX/product/proto/pb"
 	"google.golang.org/grpc"
@@ -36,7 +37,7 @@ func fromProtoProduct(p *pb.Product) *models.Product {
 }
 
 func NewClient(url string) (*Client, error) {
-	conn, err := grpc.NewClient(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(url, append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, observability.GRPCClientOptions()...)...)
 	if err != nil {
 		return nil, err
 	}

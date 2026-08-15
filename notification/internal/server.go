@@ -9,6 +9,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/Tuananh165art/GoshopX/notification/models"
 	"github.com/Tuananh165art/GoshopX/notification/proto/pb"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -54,7 +55,7 @@ func ListenGRPC(service Service, port int) error {
 		return err
 	}
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(observability.GRPCServerOptions("notification")...)
 	pb.RegisterNotificationServiceServer(server, &grpcServer{
 		UnimplementedNotificationServiceServer: pb.UnimplementedNotificationServiceServer{},
 		service:                                service,

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Tuananh165art/GoshopX/account/models"
 	"github.com/Tuananh165art/GoshopX/account/proto/pb"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -17,7 +18,7 @@ type Client struct {
 }
 
 func NewClient(url string) (*Client, error) {
-	conn, err := grpc.NewClient(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(url, append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, observability.GRPCClientOptions()...)...)
 	if err != nil {
 		return nil, err
 	}

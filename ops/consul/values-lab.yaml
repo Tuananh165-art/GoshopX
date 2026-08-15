@@ -14,7 +14,11 @@ ui:
   enabled: true
   service:
     type: NodePort
-    nodePort: 30700
+    # The Consul Helm chart exposes separate node-port fields for HTTP/HTTPS.
+    # TLS is disabled for this lab, so only expose the HTTP UI port.
+    nodePort:
+      http: 30700
+      https: null
 client:
   enabled: false
 syncCatalog:

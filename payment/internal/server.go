@@ -15,6 +15,7 @@ import (
 	order "github.com/Tuananh165art/GoshopX/order/client"
 	"github.com/Tuananh165art/GoshopX/payment/models"
 	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -28,7 +29,7 @@ func ListenGRPC(service Service, port int) error {
 	if err != nil {
 		return err
 	}
-	server := grpc.NewServer()
+	server := grpc.NewServer(observability.GRPCServerOptions("payment")...)
 	pb.RegisterPaymentServiceServer(server, &grpcServer{service: service})
 	reflection.Register(server)
 	return server.Serve(lis)

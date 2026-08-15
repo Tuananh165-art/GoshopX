@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -8,12 +9,20 @@ import (
 	accountclient "github.com/Tuananh165art/GoshopX/account/client"
 	"github.com/Tuananh165art/GoshopX/notification/config"
 	"github.com/Tuananh165art/GoshopX/notification/internal"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"github.com/tinrab/retry"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
+	shutdownTracing, traceErr := observability.ConfigureTracing(context.Background(), "notification")
+	if traceErr != nil {
+		log.Printf("OpenTelemetry tracing disabled: %v", traceErr)
+	} else {
+		defer func() { _ = shutdownTracing(context.Background()) }()
+	}
+	observability.StartMetricsServer(9090)
 	var repository internal.Repository
 
 	retry.ForeverSleep(2*time.Second, func(_ int) (err error) {

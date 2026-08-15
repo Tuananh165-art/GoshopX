@@ -22,6 +22,8 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 - [Admin Commerce Spec](./16-admin-commerce-spec.md): business rules, metrics, contracts, and projection rules.
 - [K3s DevSecOps Lab Runbook](./22-devsecops-k3s-lab-runbook.md): resource-bounded K3s, Helm, Argo CD, Consul, Grafana, Prometheus, Loki and k6 delivery flow.
 - [Ubuntu K3s Step-by-Step Deployment](./23-ubuntu-k3s-step-by-step-deployment.md): full operator sequence from host setup through GitOps deployment and rollback.
+- [Operator Dashboard NodePort Runbook](./24-operator-dashboard-nodeport-runbook.md): NodePort URLs, firewall allowlist, login, observability boundaries, and safe use of platform dashboards.
+- [Application Observability](./25-application-observability.md): Prometheus ServiceMonitors, Go metrics, Jaeger OTLP tracing, deployment, and evidence checks.
 
 ## Architecture Decisions
 

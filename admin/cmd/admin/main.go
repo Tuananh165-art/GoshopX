@@ -8,6 +8,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/Tuananh165art/GoshopX/admin/config"
 	"github.com/Tuananh165art/GoshopX/admin/internal"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	"github.com/redis/go-redis/v9"
 	"github.com/tinrab/retry"
 	"gorm.io/driver/postgres"
@@ -15,6 +16,13 @@ import (
 )
 
 func main() {
+	shutdownTracing, traceErr := observability.ConfigureTracing(context.Background(), "admin")
+	if traceErr != nil {
+		log.Printf("OpenTelemetry tracing disabled: %v", traceErr)
+	} else {
+		defer func() { _ = shutdownTracing(context.Background()) }()
+	}
+	observability.StartMetricsServer(9090)
 	var repository internal.Repository
 	retry.ForeverSleep(2*time.Second, func(_ int) error {
 		db, err := gorm.Open(postgres.Open(config.DatabaseURL), &gorm.Config{})

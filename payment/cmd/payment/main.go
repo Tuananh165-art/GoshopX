@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"github.com/IBM/sarama"
 	"github.com/Tuananh165art/GoshopX/payment/config"
 	"github.com/Tuananh165art/GoshopX/payment/internal"
 	"github.com/Tuananh165art/GoshopX/payment/vnpay"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	productclient "github.com/Tuananh165art/GoshopX/product/client"
 	"github.com/tinrab/retry"
 	"gorm.io/driver/postgres"
@@ -14,6 +16,13 @@ import (
 )
 
 func main() {
+	shutdownTracing, traceErr := observability.ConfigureTracing(context.Background(), "payment")
+	if traceErr != nil {
+		log.Printf("OpenTelemetry tracing disabled: %v", traceErr)
+	} else {
+		defer func() { _ = shutdownTracing(context.Background()) }()
+	}
+	observability.StartMetricsServer(9090)
 	var repo internal.Repository
 	var err error
 	retry.ForeverSleep(2*time.Second, func(_ int) error {

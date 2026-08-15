@@ -9,6 +9,7 @@ import (
 	account "github.com/Tuananh165art/GoshopX/account/client"
 	"github.com/Tuananh165art/GoshopX/order/models"
 	"github.com/Tuananh165art/GoshopX/order/proto/pb"
+	"github.com/Tuananh165art/GoshopX/pkg/observability"
 	product "github.com/Tuananh165art/GoshopX/product/client"
 	mapset "github.com/deckarep/golang-set/v2"
 	"google.golang.org/grpc"
@@ -52,7 +53,7 @@ func ListenGRPC(service Service, accountURL string, productURL string, port int)
 		return err
 	}
 
-	serv := grpc.NewServer()
+	serv := grpc.NewServer(observability.GRPCServerOptions("order")...)
 	pb.RegisterOrderServiceServer(serv, &grpcServer{
 		pb.UnimplementedOrderServiceServer{},
 		service,
