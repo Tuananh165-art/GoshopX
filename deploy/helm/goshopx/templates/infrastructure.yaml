@@ -239,19 +239,40 @@ spec:
       volumes:
         - name: runtime
           emptyDir: {}
+        # Attu generates env-config.js at startup. Prepare an isolated writable
+        # copy of the image's static files so the application root can remain
+        # read-only while preserving /app/build/env.sh and all UI assets.
+        - name: attu-build
+          emptyDir: {}
+      initContainers:
+        - name: prepare-attu-build
+          image: zilliz/attu:v2.5.12
+          command: ["/bin/bash", "-ec"]
+          args:
+            - cp -R /app/build/. /work/build/
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - name: attu-build
+              mountPath: /work/build
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 50m, memory: 64Mi } }
       containers:
         - name: attu
           # Attu v2 remains compatible with the lab's Milvus 2.5 server.
           image: zilliz/attu:v2.5.12
           securityContext:
             allowPrivilegeEscalation: false
-            # Attu updates /app/build/env-config.js at startup. Do not mount
-            # an emptyDir on /app/build because that hides image-provided env.sh.
+            readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
           volumeMounts:
             - name: runtime
               mountPath: /tmp
+            - name: attu-build
+              mountPath: /app/build
           env: [{ name: MILVUS_URL, value: milvus:19530 }]
           ports: [{ name: http, containerPort: 3000 }]
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 200m, memory: 256Mi } }
