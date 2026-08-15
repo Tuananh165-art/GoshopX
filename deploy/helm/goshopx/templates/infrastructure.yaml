@@ -90,71 +90,76 @@ spec:
     metadata: { labels: { app: {{ $name }} } }
     spec:
       automountServiceAccountToken: false
-      {{- if eq $name "redis" }}
-      # The official Redis image includes the redis user/group at UID/GID 999.
-      # Declare it explicitly: relying on the image's root entrypoint causes
-      # KSV-0118, even though the Redis process can safely run as this user.
       securityContext:
         runAsNonRoot: true
-        runAsUser: 999
-        runAsGroup: 999
-        fsGroup: 999
+        runAsUser: {{ if eq $name "redis" }}999{{ else }}1000{{ end }}
+        runAsGroup: {{ if eq $name "redis" }}999{{ else }}1000{{ end }}
+        fsGroup: {{ if eq $name "redis" }}999{{ else }}1000{{ end }}
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile: { type: RuntimeDefault }
-      {{- end }}
-      {{- if eq $name "kafka" }}
-      # Apache Kafka already runs as appuser (1000) in this image. Declare
-      # that fact so admission/security scanners do not have to trust the
-      # image default.
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        seccompProfile: { type: RuntimeDefault }
-      {{- end }}
-      {{- if eq $name "product-db" }}
-      # Elasticsearch runs as UID/GID 1000.  Apply that group to the newly
-      # provisioned local-path volume before the container writes its index.
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile: { type: RuntimeDefault }
-      {{- end }}
-      {{- with $component.persistence }}
       volumes:
+        - name: runtime
+          emptyDir: {}
+        {{- if eq $name "redis" }}
+        - name: redis-data
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $name "minio" }}
+        - name: minio-data
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $name "milvus-etcd" }}
+        - name: etcd-data
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $name "milvus-minio" }}
+        - name: milvus-minio-data
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $name "milvus" }}
+        - name: milvus-data
+          emptyDir: {}
+        {{- end }}
+        {{- with $component.persistence }}
         - name: data
           persistentVolumeClaim:
             claimName: {{ $name }}-data
-      {{- end }}
+        {{- end }}
       containers:
         - name: {{ $name }}
           image: {{ $component.image }}
-          {{- if eq $name "redis" }}
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
-          {{- end }}
-          {{- if eq $name "kafka" }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: { drop: ["ALL"] }
-            seccompProfile: { type: RuntimeDefault }
-          {{- end }}
-          {{- if eq $name "product-db" }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: { drop: ["ALL"] }
-            seccompProfile: { type: RuntimeDefault }
-          {{- end }}
-          {{- with $component.persistence }}
           volumeMounts:
+            - name: runtime
+              mountPath: /tmp
+            {{- if eq $name "redis" }}
+            - name: redis-data
+              mountPath: /data
+            {{- end }}
+            {{- if eq $name "minio" }}
+            - name: minio-data
+              mountPath: /data
+            {{- end }}
+            {{- if eq $name "milvus-etcd" }}
+            - name: etcd-data
+              mountPath: /etcd
+            {{- end }}
+            {{- if eq $name "milvus-minio" }}
+            - name: milvus-minio-data
+              mountPath: /minio_data
+            {{- end }}
+            {{- if eq $name "milvus" }}
+            - name: milvus-data
+              mountPath: /var/lib/milvus
+            {{- end }}
+            {{- with $component.persistence }}
             - name: data
               mountPath: {{ .mountPath }}
-          {{- end }}
+            {{- end }}
           {{- with $component.command }}
           command: {{ toYaml . | nindent 12 }}
           {{- end }}
@@ -204,10 +209,28 @@ spec:
     metadata: { labels: { app: attu } }
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: runtime
+          emptyDir: {}
       containers:
         - name: attu
           # Attu v2 remains compatible with the lab's Milvus 2.5 server.
           image: zilliz/attu:v2.5.12
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - name: runtime
+              mountPath: /tmp
           env: [{ name: MILVUS_URL, value: milvus:19530 }]
           ports: [{ name: http, containerPort: 3000 }]
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 200m, memory: 256Mi } }
@@ -242,14 +265,23 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: runtime
+          emptyDir: {}
       containers:
         - name: jaeger
           image: jaegertracing/all-in-one:1.68.0
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - name: runtime
+              mountPath: /tmp
           ports:
             - { name: ui, containerPort: 16686 }
             - { name: otlp-grpc, containerPort: 4317 }
@@ -286,14 +318,27 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: runtime
+          emptyDir: {}
+        - name: kibana-data
+          emptyDir: {}
       containers:
         - name: kibana
           image: docker.elastic.co/kibana/kibana-oss:6.2.4
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - name: runtime
+              mountPath: /tmp
+            - name: kibana-data
+              mountPath: /usr/share/kibana/data
           env: [{ name: ELASTICSEARCH_URL, value: http://product-db:9200 }]
           ports: [{ name: http, containerPort: 5601 }]
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 300m, memory: 384Mi } }
@@ -321,14 +366,23 @@ spec:
         runAsNonRoot: true
         runAsUser: 100
         runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: runtime
+          emptyDir: {}
       containers:
         - name: kafka-ui
           image: provectuslabs/kafka-ui:v0.7.2
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - name: runtime
+              mountPath: /tmp
           env:
             - { name: DYNAMIC_CONFIG_ENABLED, value: "false" }
             - { name: KAFKA_CLUSTERS_0_NAME, value: goshopx-lab }
@@ -363,14 +417,27 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: runtime
+          emptyDir: {}
+        - name: redisinsight-data
+          emptyDir: {}
       containers:
         - name: redisinsight
           image: redis/redisinsight:2.70.0
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
             seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - name: runtime
+              mountPath: /tmp
+            - name: redisinsight-data
+              mountPath: /data
           ports: [{ name: http, containerPort: 5540 }]
           resources: { requests: { cpu: 25m, memory: 96Mi }, limits: { cpu: 250m, memory: 256Mi } }
 ---
