@@ -22,6 +22,20 @@ spec:
   template:
     metadata: { labels: { app: {{ $name }} } }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $.Values.infrastructure.security.postgres.runAsUser }}
+        runAsGroup: {{ $.Values.infrastructure.security.postgres.runAsGroup }}
+        fsGroup: {{ $.Values.infrastructure.security.postgres.fsGroup }}
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      volumes:
+        # PostgreSQL needs a runtime directory for its Unix socket and lock
+        # files.  Keeping it on an emptyDir allows the image filesystem to be
+        # mounted read-only while the database data remains on its PVC.
+        - name: runtime
+          emptyDir: {}
       containers:
         - name: postgresql
           image: {{ if eq $name "recommender-db" }}postgres:15{{ else }}postgres:14.0{{ end }}
@@ -30,8 +44,15 @@ spec:
             - { name: POSTGRES_DB, value: goshopx }
             - { name: POSTGRES_USER, valueFrom: { secretKeyRef: { name: {{ $.Values.global.runtimeSecretName }}, key: POSTGRES_USER } } }
             - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: {{ $.Values.global.runtimeSecretName }}, key: POSTGRES_PASSWORD } } }
-          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: runtime, mountPath: /var/run/postgresql }
           resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 300m, memory: 384Mi } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
   volumeClaimTemplates:
     - metadata: { name: data }
       spec:

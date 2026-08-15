@@ -37,6 +37,14 @@ observability:
 
 infrastructure:
   enabled: false
+  security:
+    # The official PostgreSQL image stores its data as uid/gid 999.  Keep the
+    # values configurable for a compatible image upgrade, rather than relying
+    # on the image entrypoint to start as root and change ownership at runtime.
+    postgres:
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
   dashboards:
     nodePort: false
     kibana: 30601
