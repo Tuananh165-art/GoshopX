@@ -7,7 +7,7 @@ cd "$repo_root"
 : "${GITOPS_REPO_URL:?Set the HTTPS URL of this Git repository}"
 : "${GHCR_IMAGE_REGISTRY:?Set e.g. ghcr.io/owner}"
 
-./scripts/lab/bootstrap-platform.sh
+bash scripts/lab/bootstrap-platform.sh
 kubectl -n argocd rollout status deployment/argocd-server --timeout=10m
 kubectl -n monitoring get pods
 kubectl -n logging get pods

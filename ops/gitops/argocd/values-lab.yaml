@@ -1,0 +1,23 @@
+# K3s Traefik publishes its HTTP/S entrypoints through NodePorts and does not
+# populate Ingress.status.loadBalancer. Argo CD's default Ingress assessment
+# therefore stays Progressing even when a Traefik rule is usable. Limit this
+# override to Traefik rules that declare at least one host/path.
+configs:
+  cm:
+    "resource.customizations.health.networking.k8s.io_Ingress": |
+      hs = {}
+      if obj.status ~= nil and obj.status.loadBalancer ~= nil and obj.status.loadBalancer.ingress ~= nil and #obj.status.loadBalancer.ingress > 0 then
+        hs.status = "Healthy"
+        hs.message = "Ingress has a load balancer address"
+        return hs
+      end
+
+      if obj.spec ~= nil and obj.spec.ingressClassName == "traefik" and obj.spec.rules ~= nil and #obj.spec.rules > 0 then
+        hs.status = "Healthy"
+        hs.message = "Traefik ingress rule configured; K3s does not publish a load balancer address"
+        return hs
+      end
+
+      hs.status = "Progressing"
+      hs.message = "Waiting for an ingress rule or load balancer address"
+      return hs

@@ -18,6 +18,7 @@ helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
 helm upgrade --install argocd argo/argo-cd --namespace argocd \
+  --values ops/gitops/argocd/values-lab.yaml \
   --set server.replicas=1 --set repoServer.replicas=1 \
   --set controller.replicas=1 --set notifications.enabled=false \
   --set redis-ha.enabled=false --set redis.enabled=true \

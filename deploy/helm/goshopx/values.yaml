@@ -64,6 +64,16 @@ infrastructure:
     attuUI: 30707
     jaegerUI: 30713
   storageClass: local-path
+  productDatabase:
+    # Elasticsearch stores the product catalog index here. Keep it on a PVC so
+    # a pod restart or a node reschedule does not discard the seeded catalog.
+    persistence:
+      size: 5Gi
+    # The JVM heap remains intentionally bounded at 256Mi in the manifest;
+    # Elasticsearch also needs native memory, so allow a 1Gi container limit.
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+      limits: { cpu: 750m, memory: 1Gi }
 
 image:
   tag: latest
