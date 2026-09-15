@@ -1,183 +1,110 @@
-# GoshopX
+# GoshopX | GraphQL-first E-commerce Microservices
 
-GoshopX is a GraphQL-first e-commerce microservices stack built with Go and Python. Public client traffic goes through GraphQL, internal synchronous calls use gRPC, asynchronous business facts move through Kafka, product search stays in Elasticsearch, and active cart state now uses Redis.
+[English](#english) · [Tiếng Việt](#tieng-viet) · [Technical guide](./docs/27-technical-architecture-and-devops-guide.md) · [ADRs](./docs/adr/)
 
-## Services
+<p align="center"><img src="./asset/images/UI.png" alt="GoshopX storefront and operations UI" width="900" /></p>
 
-- `account`: account registration, login, JWT issuance
-- `product`: product CRUD and Elasticsearch-backed catalog/search
-- `order`: order creation and order event publishing
-- `payment`: payment workflow, webhook handling, payment event publishing
-- `inventory`: stock ownership, reservations, low-stock signals
-- `cart`: Redis-backed active cart with reservation coordination
-- `notification`: in-app notification feed backed by PostgreSQL
-- `admin`: Kafka-backed audit/reporting read model with dashboard and audit gRPC queries
-- `graphql`: public GraphQL API gateway
-- `recommender`: Python recommendation services and consumers
+<p align="center">
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/go.png" title="Go" alt="Go" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/python.png" title="Python" alt="Python" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/typescript.png" title="TypeScript" alt="TypeScript" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/react.png" title="React" alt="React" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/graphql.png" title="GraphQL" alt="GraphQL" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/postgresql.png" title="PostgreSQL" alt="PostgreSQL" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/docker.png" title="Docker" alt="Docker" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/kubernetes.png" title="Kubernetes / K3s" alt="Kubernetes / K3s" width="48" height="48" />
+<img src="https://raw.githubusercontent.com/marwin1991/profile-technology-icons/main/icons/github.png" title="GitHub Actions" alt="GitHub Actions" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/apachekafka" title="Apache Kafka" alt="Apache Kafka" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/kong" title="Kong Gateway" alt="Kong Gateway" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/grpc" title="gRPC" alt="gRPC" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/argo" title="Argo CD" alt="Argo CD" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/consul" title="HashiCorp Consul" alt="HashiCorp Consul" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/jaeger" title="Jaeger" alt="Jaeger" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/redis" title="Redis" alt="Redis" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/grafanaloki" title="Grafana Loki" alt="Grafana Loki" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/prometheus" title="Prometheus" alt="Prometheus" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/grafana" title="Grafana" alt="Grafana" width="48" height="48" />
+<img src="https://cdn.simpleicons.org/milvus" title="Milvus" alt="Milvus" width="48" height="48" />
+</p>
 
-Admin governance is implemented as RBAC inside `account` for v1. Roles are carried in new JWTs, privileged operations are exposed through GraphQL, account gRPC rechecks policy, and audit facts use `admin_events`.
+## English
 
-## Runtime Stack
+GoshopX is a GraphQL-first e-commerce platform. Go services own account, catalogue, order, payment, inventory, cart, notification and reporting capabilities. The Python recommender consumes durable facts and provides recommendation/chat. GraphQL is the only browser contract; gRPC is internal synchronous communication and Kafka carries durable business facts.
 
-- PostgreSQL: `account_db`, `order_db`, `payment_db`, `inventory_db`, `notification_db`, `admin_db`, `recommender_db`
-- Kafka: `kafka`
-- Elasticsearch: `product_db`
-- Redis: `redis`
-- MinIO: `minio`
+### Implemented capabilities
 
-### Local infrastructure dashboards
+- Shopper: registration/login (including Google), catalogue/search, cart, stock reservation, checkout hand-off, COD, payment return, notifications, orders and recommendation chat.
+- Operations: RBAC, account governance, catalogue moderation/media upload, inventory adjustment, cancellation, payment reconciliation/refund, dashboard, audit, low-stock and reservation views.
+- Edge: Kong exposes the SPA, `POST /graphql`, Playground/health and the narrow payment IPN only. gRPC and data stores are private.
+- Delivery: Docker Compose locally; Helm + K3s + Argo CD GitOps in the lab; GitHub Actions tests, scans, creates immutable GHCR images and promotes their SHA in Git.
 
-After `docker compose up -d`:
-
-- Kafka UI: http://localhost:8088
-- RedisInsight: http://localhost:5540
-- MinIO Console: http://localhost:9001
-- MinIO API: http://localhost:9000
-- Kibana: http://localhost:5601
-
-Kafka UI is configured read-only for local inspection. RedisInsight persists its own connection metadata in `redisinsight_data`; add the Redis connection as `redis:6379` from inside the Compose network or `localhost:6379` from the host. MinIO Console is included in the official MinIO image and uses the same `minio_data` volume as the object API. Kibana is pinned to `6.2.4` to match Elasticsearch OSS `6.2.4`; in Kibana, create an index pattern such as `catalog*` and select `@timestamp` only if the index contains that field.
-
-### Data ownership and synchronization strategy
-
-Do not write every UI field into every storage system. Each system has one owner:
-
-- PostgreSQL: transactional source of truth for accounts, orders, payments, inventory, reservations, notifications, admin read models, and recommender state.
-- Elasticsearch: Product catalog/search document source for product content, catalog rating/reviews, and read-optimized search. DummyJSON is only a repeatable seed input; it is not the checkout/payment source of truth.
-- Redis: short-lived active cart state and reservation-aware cart reads. Cart data is JSON with TTL; it is not the durable order/payment database.
-- Kafka: durable business facts and integration boundary (`order_events`, `payment_events`, `inventory_events`, `cart_events`, `product_events`, `admin_events`, and `interaction_events`). Kafka is not queried by the browser and is not a replacement for transactional databases.
-- MinIO: binary object storage for product media. PostgreSQL/Elasticsearch stores metadata and public object references; image bytes are not duplicated into GraphQL or Elasticsearch documents.
-
-The safe write pattern is: commit the owning transactional store first, publish an idempotent Kafka event/outbox record, update read models/search indexes asynchronously, and invalidate/re-read Redis caches. The browser reads only through GraphQL and must never write directly to PostgreSQL, Kafka, Redis, MinIO, or Elasticsearch.
-
-Core commerce topics:
-
-- `product_events`
-- `interaction_events`
-- `order_events`
-- `payment_events`
-- `inventory_events`
-- `cart_events`
-- `admin_events`
-
-## Configuration
-
-Runtime defaults now live in:
-
-- `.env`: local developer values
-- `.env.example`: shareable template
-
-Key groups:
-
-- Database URLs: account, order, payment, inventory, notification, recommender
-- Internal service URLs: account, product, order, payment, recommender, inventory, cart, notification
-- Admin reporting: `ADMIN_DATABASE_URL`, `ADMIN_SERVICE_URL`, `ADMIN_EVENTS_TOPIC`
-- Infra: Kafka, Redis, MinIO (`MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `MINIO_PUBLIC_URL`)
-- Auth: `SECRET_KEY`, `ISSUER`
-- Payments: `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_PAYMENT_URL` for the VNPay Sandbox flow; keep any provider-specific credentials only in local/runtime secrets.
-- DummyJSON catalog seed: `DUMMYJSON_BASE_URL`, `DUMMYJSON_SEED_ENABLED`, `DUMMYJSON_SEED_LIMIT`
-- Admin governance: `ADMIN_EVENTS_TOPIC`; roles and account status are owned by `account`
-
-`docker-compose.yaml` reads these values with local-safe defaults, so you can override only what you need.
-
-Google Login and Gmail notification setup is documented in [docs/21-google-login-gmail-notifications.md](./docs/21-google-login-gmail-notifications.md). Google Login uses a Web OAuth client ID; Gmail delivery uses SMTP with a Gmail App Password. For the deployed lab, the JavaScript origin must exactly be `https://goshopx.click`; quote SMTP passwords containing spaces in the shell-sourced runtime secret. See [current K3s operations](./docs/26-k3s-lab-current-operations.md).
-
-### DummyJSON product catalog
-
-The Product service maps DummyJSON's complete product payload into the local Elasticsearch catalog: title/description, category, brand, price/discount, rating, stock, SKU, dimensions, shipping/warranty, reviews, metadata, thumbnail, and all images. Existing GraphQL product queries support search, category filtering, and pagination.
-
-To seed the catalog on Product service startup:
-
-```bash
-DUMMYJSON_SEED_ENABLED=true DUMMYJSON_SEED_LIMIT=0 docker compose up --build -d product
+```mermaid
+flowchart LR
+  B[Browser / React SPA] --> K[Kong edge]
+  K --> W[Nginx web]
+  K --> G[GraphQL]
+  G -->|gRPC| S[Domain services]
+  S --> P[(PostgreSQL)]
+  S --> E[(Elasticsearch)]
+  S --> R[(Redis)]
+  S --> M[(MinIO)]
+  S -->|facts| Q[(Kafka)]
+  Q --> AI[Python recommender]
+  AI --> V[(Milvus)]
+  AI -->|gRPC| G
 ```
 
-`DUMMYJSON_SEED_LIMIT=0` imports all products. The seed preserves DummyJSON product IDs, is repeatable, and publishes products as `published`/`approved` demo catalog records. DummyJSON remains an external placeholder source; production catalog ownership stays with the Product service and Elasticsearch.
+### Stack
 
-### Connecting to PostgreSQL with TablePlus
+| Area | Technology | Purpose |
+| --- | --- | --- |
+| UI | React, TypeScript, Vite, Nginx | typed SPA, fast build, static delivery |
+| APIs | GraphQL/gqlgen/Gin, gRPC/Protobuf, Kong | public capability API, internal contracts, secure edge |
+| Data | PostgreSQL, Elasticsearch, Redis, MinIO | transactions, search, TTL cart/cache, product objects |
+| Events/AI | Kafka, Python, LangChain/LangGraph, Milvus | business facts, recommendation and hybrid retrieval |
+| Platform | Docker, Helm, K3s, Argo CD, GitHub Actions | local runtime, declarative GitOps delivery |
+| Quality | Trivy, TruffleHog, Prometheus, Grafana, Loki, Jaeger, k6 | security gates, metrics, logs, traces and load checks |
 
-For local TablePlus access, Compose publishes PostgreSQL only on loopback with one host port per bounded context:
+### Quick start
 
-| Service | Host | Port | Database |
-|---|---|---:|---|
-| Account | `127.0.0.1` | `5433` | value of `POSTGRES_DB` |
-| Order | `127.0.0.1` | `5434` | value of `POSTGRES_DB` |
-| Payment | `127.0.0.1` | `5435` | value of `POSTGRES_DB` |
-| Inventory | `127.0.0.1` | `5436` | value of `POSTGRES_DB` |
-| Notification | `127.0.0.1` | `5437` | value of `POSTGRES_DB` |
-| Admin | `127.0.0.1` | `5438` | value of `POSTGRES_DB` |
-| Recommender | `127.0.0.1` | `5439` | value of `POSTGRES_DB` |
-
-In TablePlus select PostgreSQL and enter the host, port, database, user, and rotated password from your local `.env`. Set SSL mode to `Disable` for this local Compose setup. Do not paste credentials into documentation, commits, screenshots, or chat. Product is not PostgreSQL: inspect its Elasticsearch data through Kibana at http://localhost:5601.
-
-## Getting Started
-
-1. Review `.env.example` and update `.env` for your machine.
-2. Validate Compose:
-
-```bash
-docker compose config --quiet
-```
-
-3. Build and start the stack:
-
-```bash
-docker compose up --build -d
-```
-
-4. Open GraphQL:
-
-- Playground: `http://localhost:8080/playground`
-- GraphQL endpoint: `http://localhost:8080/graphql`
-- Health: `http://localhost:8080/health`
-- Kong Manager: `http://localhost:8002`
-- Kong Admin API (local only): `http://localhost:8001`
-
-## Verification
-
-Suggested checks:
-
-```bash
-go test -race -count=1 ./account/... ./product/... ./order/... ./payment/... ./graphql/... ./pkg/... ./inventory/... ./cart/... ./notification/...
-go test ./tests/e2e
+```powershell
+Copy-Item .env.example .env
 docker compose config --quiet
 docker compose up --build -d
 ```
 
-## Deploy K3s / DevSecOps
+Open `http://localhost:8080/`, `http://localhost:8080/playground`, or `http://localhost:8080/health`.
 
-Kubernetes uses the same architecture as Compose: Traefik is the K3s ingress
-controller, but it forwards only to DB-less Kong. Kong routes public Web,
-GraphQL and the narrow Payment webhook; gRPC services and all data systems stay
-private `ClusterIP` Services. GitHub Actions builds/scans immutable GHCR images,
-promotes the image SHA in Git, and Argo CD reconciles Git into K3s. GitHub
-Actions does not receive a cluster kubeconfig.
+```powershell
+$packages = go list ./... | Where-Object { $_ -notmatch '/tests/e2e$' }
+go test -race -count=1 $packages
+Push-Location recommender; uv sync --frozen; uv run pytest; Pop-Location
+Push-Location web; npm ci; npm test -- --run; npm run build; Pop-Location
+```
 
-For Ubuntu 22.04/24.04 VPS deployment, follow the complete deployment guide:
+`docker compose up` proves container orchestration, not every dependency's readiness or an end-to-end customer journey. Use the [bilingual technical guide](./docs/27-technical-architecture-and-devops-guide.md) for architecture, workflows, design system, DevOps, test boundaries and rollback.
 
-- [Ubuntu K3s step-by-step deployment](./docs/23-ubuntu-k3s-step-by-step-deployment.md)
-- [Ubuntu deployment scripts](./scripts/ubuntu/README.md)
-- [K3s DevSecOps lab runbook](./docs/22-devsecops-k3s-lab-runbook.md)
+## Tiếng Việt
 
-The lab must be deployed in phases. The current single-node installation can
-expose a narrowly allowlisted set of operator NodePorts (Grafana, Prometheus,
-Argo CD, Jaeger, Kibana, Kafka UI, Attu and RedisInsight); keep data protocols
-and Kong Admin private. Do not use the public app domain/Cloudflare proxy for
-arbitrary NodePorts. See [NodePort operator access](./docs/24-operator-dashboard-nodeport-runbook.md) and
-[current K3s operations](./docs/26-k3s-lab-current-operations.md).
+GoshopX là nền tảng thương mại điện tử GraphQL-first. Service Go sở hữu account, catalog, order, payment, inventory, cart, notification và reporting. Recommender Python tiêu thụ business fact bền vững và cung cấp gợi ý/chat. GraphQL là contract duy nhất cho browser; gRPC dành cho giao tiếp nội bộ đồng bộ, Kafka mang business fact bền vững.
 
-## Local Runtime Notes
+- Khách hàng: đăng ký/đăng nhập (có Google), catalog/search, cart, giữ tồn, checkout, COD, kết quả payment, notification, order và chat gợi ý.
+- Vận hành: RBAC, quản trị account, kiểm duyệt catalog/upload media, điều chỉnh tồn, hủy đơn, đối soát/hoàn tiền, dashboard, audit và low-stock.
+- Phát hành: Docker Compose local; Helm + K3s + Argo CD GitOps cho lab; GitHub Actions test, scan, build image SHA bất biến rồi promote vào Git.
 
-- If Postgres credentials change after a previous run, old Docker volumes can keep stale users/passwords.
-- For this repo, the most common local reset targets are:
-  - `goshopx_account_db_data`
-  - `goshopx_order_db_data`
-  - `goshopx_payment_db_data`
-- Redis is required for `cart`.
-- `inventory`, `cart`, and `notification` are required for the new core commerce flow.
-- MinIO backs the admin GraphQL multipart product-media upload. Product stores only media metadata, never image bytes in Elasticsearch.
-- If Docker Desktop Buildx reports `no such job` or stops producing progress, restart Docker Desktop and rerun `docker compose build` followed by `docker compose up -d`.
-- Kong management ports are loopback-bound in Compose: `8001` and `8002` are reachable only from the local machine unless you intentionally change the port bindings.
+Tài liệu song ngữ đầy đủ về kiến trúc, luồng nghiệp vụ, techstack, design system, DevOps, build/run/test và rollback nằm tại [Technical Architecture and DevOps Guide](./docs/27-technical-architecture-and-devops-guide.md).
 
-## Documentation
+Không commit `.env`, JWT, mật khẩu hay key OAuth/SMTP/VNPay/AI/Kubernetes. Giá trị Compose mặc định chỉ dành cho local; browser không được gọi trực tiếp gRPC, Kafka, Redis, PostgreSQL, Elasticsearch hay MinIO.
 
-Start with [docs/00-index.md](./docs/00-index.md). The docs set includes BMAD process, Scrum delivery, architecture decisions, core-commerce specs, runtime configuration notes, the current K3s operations runbook, NodePort access, and observability evidence.
+## Documentation | Tài liệu
+
+- [Documentation index](./docs/00-index.md)
+- [Business rules](./docs/03-business-domain-rules.md)
+- [Architecture guide](./docs/04-architecture-decision-guide.md)
+- [Technical guide](./docs/27-technical-architecture-and-devops-guide.md)
+- [ADRs](./docs/adr/)
+- [K3s operator guide](./docs/23-ubuntu-k3s-step-by-step-deployment.md)
+
+## License
+
+See [LICENSE](./LICENSE).

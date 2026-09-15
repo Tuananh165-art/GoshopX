@@ -42,3 +42,8 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 - `.agents/skills/*/SKILL.md`
 
 Use these files together: docs describe the project process, rules define constraints, memory preserves stable context, agents define responsibilities, and skills define repeatable execution behavior.
+
+## Technical Documentation Baseline
+
+- [Technical Architecture and DevOps Guide](./27-technical-architecture-and-devops-guide.md): bilingual source-reviewed architecture, workflows, stack rationale, design system, build/test, DevOps and delivery plan.
+- [ADR-20260915 Documentation as Code and Evidence Boundaries](./adr/ADR-20260915-documentation-as-code-and-evidence-boundaries.md): documentation ownership and validation-claim discipline.
