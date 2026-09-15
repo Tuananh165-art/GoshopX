@@ -1,4 +1,0 @@
-interface:
-  display_name: "GoshopX BA"
-  short_description: "Clarify business rules and criteria"
-  default_prompt: "Use this role skill to model GoshopX business rules, shared language, and acceptance criteria."

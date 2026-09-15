@@ -1,4 +1,0 @@
-interface:
-  display_name: "GoshopX Solution Architect"
-  short_description: "Design service boundaries and contracts"
-  default_prompt: "Use this role skill to make architecture decisions for GoshopX boundaries, data ownership, and contracts."

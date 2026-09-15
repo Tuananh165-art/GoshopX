@@ -1,4 +1,0 @@
-interface:
-  display_name: "GoshopX DevOps"
-  short_description: "Operate runtime and release workflow"
-  default_prompt: "Use this role skill to change Docker, Compose, CI, env vars, observability, deployment, and rollback docs."
