@@ -41,12 +41,12 @@
   <img src="https://cdn.simpleicons.org/graphql" title="GraphQL" alt="GraphQL" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/apachekafka" title="Kafka" alt="Kafka" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/kong" title="Kong" alt="Kong" width="32" height="32" />
-  <img src="https://cdn.simpleicons.org/grpc" title="gRPC" alt="gRPC" width="32" height="32" />
+  <img src="https://grpc.io/img/logos/grpc-icon-color.png" title="gRPC" alt="gRPC" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/argo" title="Argo CD" alt="Argo CD" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/consul" title="Consul" alt="Consul" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/jaeger" title="Jaeger" alt="Jaeger" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/redis" title="Redis" alt="Redis" width="32" height="32" />
-  <img src="https://cdn.simpleicons.org/grafanaloki" title="Loki" alt="Loki" width="32" height="32" />
+  <img src="https://raw.githubusercontent.com/grafana/loki/main/docs/sources/logo.png" title="Loki" alt="Loki" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/prometheus" title="Prometheus" alt="Prometheus" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/grafana" title="Grafana" alt="Grafana" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/milvus" title="Milvus" alt="Milvus" width="32" height="32" />
