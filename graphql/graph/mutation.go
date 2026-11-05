@@ -591,7 +591,7 @@ func (resolver *mutationResolver) AdminUploadProductMedia(ctx context.Context, p
 	if err != nil {
 		return nil, err
 	}
-	_ = checksum // The object key is unique; checksum is retained in MinIO object metadata in the next migration.
+	_ = checksum // ProductMedia does not expose a checksum field yet.
 	return toGeneratedProduct(product), nil
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
@@ -49,6 +50,17 @@ func main() {
 		c.JSON(200, gin.H{
 			"message": "It works",
 		})
+	})
+	engine.GET("/media/*object", func(c *gin.Context) {
+		response, err := server.GetProductMedia(c.Request.Context(), c.Param("object"))
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		defer response.Body.Close()
+		c.Header("Cache-Control", "public, max-age=86400, immutable")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.DataFromReader(http.StatusOK, response.ContentLength, response.Header.Get("Content-Type"), response.Body, nil)
 	})
 	engine.POST("/graphql",
 		middleware.AuthorizeJWT(),

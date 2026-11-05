@@ -218,6 +218,21 @@ resource "google_storage_bucket" "catalog" {
   }
 }
 
+resource "google_storage_bucket" "milvus" {
+  name                        = "${var.project_id}-milvus"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  versioning { enabled = true }
+}
+
+resource "google_storage_bucket" "media" {
+  name                        = "${var.project_id}-media"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+}
+
 resource "google_storage_bucket" "tfstate" {
   name                        = "${var.project_id}-tfstate"
   location                    = var.region
@@ -313,6 +328,24 @@ resource "google_secret_manager_secret_iam_member" "runtime_secrets" {
 resource "google_storage_bucket_iam_member" "recommender_catalog" {
   bucket = google_storage_bucket.catalog.name
   role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_storage_bucket_iam_member" "runtime_milvus" {
+  bucket = google_storage_bucket.milvus.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_storage_bucket_iam_member" "runtime_media_creator" {
+  bucket = google_storage_bucket.media.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+resource "google_storage_bucket_iam_member" "runtime_media_reader" {
+  bucket = google_storage_bucket.media.name
+  role   = "roles/storage.objectViewer"
   member = "serviceAccount:${google_service_account.runtime.email}"
 }
 

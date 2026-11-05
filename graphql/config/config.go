@@ -20,6 +20,7 @@ var (
 	MinIOBucket     string
 	MinIOUseSSL     string
 	MinIOPublicURL  string
+	GCSMediaBucket  string
 )
 
 func init() {
@@ -40,4 +41,5 @@ func init() {
 	MinIOBucket = os.Getenv("MINIO_BUCKET")
 	MinIOUseSSL = os.Getenv("MINIO_USE_SSL")
 	MinIOPublicURL = os.Getenv("MINIO_PUBLIC_URL")
+	GCSMediaBucket = os.Getenv("GCS_MEDIA_BUCKET")
 }

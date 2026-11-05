@@ -16,3 +16,5 @@ output "sql_connection_name" { value = google_sql_database_instance.postgres.con
 output "github_wif_provider" { value = google_iam_workload_identity_pool_provider.github.name }
 output "github_release_service_account" { value = google_service_account.github_release.email }
 output "tfstate_bucket" { value = google_storage_bucket.tfstate.name }
+output "milvus_bucket" { value = google_storage_bucket.milvus.name }
+output "media_bucket" { value = google_storage_bucket.media.name }

@@ -28,6 +28,11 @@ infrastructure:
     resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: 150m, memory: 128Mi}}
   storageClass: standard-rwo
   persistence: {enabled: true}
+  gcs:
+    enabled: true
+    mediaBucket: "generated-mote-467410-b0-media"
+    milvusBucket: "generated-mote-467410-b0-milvus"
+  kibanaResources: {requests: {cpu: 50m, memory: 256Mi}, limits: {cpu: 500m, memory: 1Gi}}
   dashboards: {nodePort: false, kafkaUIEnabled: false}
   nodePorts: {enabled: false}
 services:
@@ -40,6 +45,7 @@ services:
   cart:
     imageDigest: sha256:938cad5c92a5bc07d8808881f81bf2d5da398ffbaa96df95cd9e218c2df447c7
   graphql:
+    secretKeys: { SECRET_KEY: SECRET_KEY }
     imageDigest: sha256:328e724302b3ae076c4f986f0e5ace8f9686939b3f944ff825aad758ddaa8257
   inventory:
     imageDigest: sha256:ca78535a269726f2acabb8a466476a199b124107ac5c035fec0f0e093391d4b7
@@ -54,6 +60,7 @@ services:
   web:
     imageDigest: sha256:23edd399bc3f4682ef1a24fafc987aa44b014fb9d3439f1a483516977b0116b5
 config:
+  GCS_MEDIA_BUCKET: "generated-mote-467410-b0-media"
   DUMMYJSON_SEED_ENABLED: "true"
   DUMMYJSON_SEED_LIMIT: "0"
   DUMMYJSON_PRICE_VND_RATE: "25000"

@@ -64,7 +64,7 @@
 
 GoshopX is a full-stack e-commerce reference platform for developers, students, and platform engineers who need a browser-safe API while keeping commerce domains independently owned. React calls GraphQL through Kong; Go services use typed gRPC for immediate internal decisions; Kafka distributes durable business facts; each bounded context owns its persistence. A Python recommender provides ranking and hybrid retrieval without making commerce unavailable when AI artifacts are missing.
 
-> **GCP lab delivery:** Terraform, a separate-project GKE overlay, GitHub OIDC image promotion, architecture assets and a deletion runbook are under active implementation. The lab has not been applied. Secret Manager synchronization, live Gateway reconciliation, provider accounting and production-like commerce recovery remain explicit gates. See [review evidence](./docs/audit/20261105-repository-review.md).
+> **GCP lab delivery:** The dedicated Terraform resources and GKE cluster are already present in the existing project; the latest app rollout exposed Kafka PVC, MinIO image, Milvus storage and Kibana memory issues. The current fix adds private GCS object storage and Workload Identity for Milvus and GraphQL media. It still requires a Terraform plan/apply for the two new buckets, GitHub image build/promotion, Argo reconciliation and live smoke checks. See [GKE pod recovery](./docs/gcp/pod-recovery.md) and [review evidence](./docs/audit/20261105-repository-review.md).
 
 ## GCP Architecture
 

@@ -21,7 +21,10 @@ spec:
       labels:
         {{- include "goshopx.labels" $ctx | nindent 8 }}
     spec:
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ and (eq $name "graphql") $.Values.infrastructure.gcs.enabled }}
+      {{- if and (eq $name "graphql") $.Values.infrastructure.gcs.enabled }}
+      serviceAccountName: {{ $.Values.infrastructure.cloudSQL.serviceAccountName }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:

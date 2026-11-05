@@ -1,6 +1,10 @@
 package graph
 
 import (
+	"context"
+	"net/http"
+	"strings"
+
 	"github.com/99designs/gqlgen/graphql"
 
 	account "github.com/Tuananh165art/GoshopX/account/client"
@@ -140,6 +144,10 @@ func (server *Server) ToExecutableSchema() graphql.ExecutableSchema {
 	return generated.NewExecutableSchema(generated.Config{
 		Resolvers: server,
 	})
+}
+
+func (server *Server) GetProductMedia(ctx context.Context, objectName string) (*http.Response, error) {
+	return server.mediaStore.getProductMedia(ctx, strings.TrimPrefix(objectName, "/"))
 }
 
 func (server *Server) Mutation() generated.MutationResolver {

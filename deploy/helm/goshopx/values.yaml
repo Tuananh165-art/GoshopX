@@ -52,6 +52,11 @@ infrastructure:
     serviceAccountName: goshopx-runtime
     image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
     resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: 150m, memory: 128Mi } }
+  gcs:
+    enabled: false
+    mediaBucket: ""
+    milvusBucket: ""
+  kibanaResources: { requests: { cpu: 50m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
   persistence:
     enabled: false
   security:
@@ -197,6 +202,7 @@ config:
   MINIO_BUCKET: product-media
   MINIO_USE_SSL: "false"
   MINIO_PUBLIC_URL: ""
+  GCS_MEDIA_BUCKET: ""
   DUMMYJSON_SEED_ENABLED: "false"
   PRODUCT_EVENTS_TOPIC: product_events
   INTERACTION_EVENTS_TOPIC: interaction_events

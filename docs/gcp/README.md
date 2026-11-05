@@ -17,7 +17,9 @@ flowchart LR
     GraphQL --> Kafka[(Kafka PVC)]
     GraphQL --> Proxy[Cloud SQL Auth Proxy]
     Proxy --> SQL[(Cloud SQL PostgreSQL 16, private IP)]
-    Recommender[LangGraph recommender] --> Milvus[(Milvus / etcd / MinIO PVC)]
+    Recommender[LangGraph recommender] --> Milvus[(Milvus / etcd PVC)]
+    Milvus --> GCSMilvus[(Private GCS Milvus bucket)]
+    GraphQL --> Media[(Private GCS product media via /media route)]
     Recommender --> DeepSeek[DeepSeek V4.1 Flash]
     Recommender --> Gemini[Gemini multimodal embeddings]
     Recommender --> Tavily[Tavily web search]
@@ -27,7 +29,7 @@ flowchart LR
   GHA[GitHub Actions: OIDC, CodeQL, scan, SBOM, provenance] --> AR[Artifact Registry]
   AR --> GKE
   SM[Secret Manager] --> GKE
-  GCS[Cloud Storage: state, catalog, Loki] --- GKE
+  GCS[Cloud Storage: state, catalog, Loki, Milvus, media] --- GKE
   KMS[Cloud KMS / Binary Authorization] --> GKE
 ```
 
@@ -35,7 +37,7 @@ The requested one-zone, two-node GKE and zonal Cloud SQL design is for a short l
 
 ## Services and cost gate
 
-Terraform configures a dedicated GoshopX VPC/NAT, private GKE Standard, Artifact Registry, Secret Manager secret containers, zonal Cloud SQL, versioned catalog/Loki buckets, static IPv4, Certificate Manager DNS authorization/map and a billing budget inside the existing project. Cloud Logging/Monitoring are enabled through GKE. GKE workloads still require a Helm release and image promotion. DNS records remain on Cloudflare; this repo intentionally does not create or edit Cloudflare records.
+Terraform configures a dedicated GoshopX VPC/NAT, private GKE Standard, Artifact Registry, Secret Manager secret containers, zonal Cloud SQL, catalog/Loki/Milvus/media buckets, static IPv4, Certificate Manager DNS authorization/map and a billing budget inside the existing project. Cloud Logging/Monitoring are enabled through GKE. GKE workloads still require a Helm release and image promotion. DNS records remain on Cloudflare; this repo intentionally does not create or edit Cloudflare records. The media bucket remains private; GraphQL serves validated product images through Kong at `/media/...`.
 
 Before provisioning, use Google Cloud Pricing Calculator and the live billing account catalog for 48 hours plus cleanup delay. Include two `e2-standard-4` nodes, 80-GiB balanced disks, Cloud SQL `db-custom-1-3840` and 20-GiB SSD, Cloud NAT gateway/data processing, external IPv4/load balancer, GKE control plane, Artifact Registry storage/vulnerability scans, Cloud Logging/Monitoring ingestion, Cloud Storage, KMS and Certificate Manager. The $/SKU estimate must be converted using the account's current billing currency and checked against the remaining credit. Terraform budget currency must match the billing account. Stop if the estimate exceeds ₫2,500,000 or there is less than 48 hours before the verified credit cutoff minus the 12-hour cleanup buffer.
 
@@ -126,4 +128,4 @@ Cloudflare remains authoritative. First deploy and verify the GKE Gateway origin
 
 ## Limits and rollback
 
-This directory does not prove live GCP creation, working application secret synchronization, image publication, public-domain functionality or production HA. Gateway/HTTPRoute manifests are implemented but not reconciled against a live cluster; Secret Manager sync remains a deployment gate. For a failed application release, revert the GitOps digest commit and let Argo CD reconcile; database rollback must follow expand/contract migrations and restore testing. For unexpected spend, scale the node pool to zero only after saving stateful data, stop the lab workloads, then execute the [teardown runbook](teardown.md). Billing reports may lag; use Cloud Monitoring and resource inventory during the lab.
+The Terraform additions for private Milvus and media buckets, app image publication, live-domain functionality and production HA are not proven until applied and tested in the cluster. For a failed application release, revert the GitOps digest commit and let Argo CD reconcile; database rollback must follow expand/contract migrations and restore testing. For unexpected spend, scale the node pool to zero only after saving stateful data, stop the lab workloads, then execute the [teardown runbook](teardown.md). Billing reports may lag; use Cloud Monitoring and resource inventory during the lab.

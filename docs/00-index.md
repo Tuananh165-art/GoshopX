@@ -6,6 +6,7 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 
 - [GCP GKE Terraform Lab](./gcp/README.md): separated-project GKE/Cloud SQL design, budget gate, GitOps setup, DNS cutover and evidence limits.
 - [GCP Deploy Step by Step](./gcp/deploy-step-by-step.md): Windows PowerShell sequence from preflight, Terraform/state/secrets, GKE Secret Sync and Argo CD through catalog, domain, acceptance and cleanup gates.
+- [GKE Pod Recovery](./gcp/pod-recovery.md): targeted recovery for Kafka PVC `lost+found`, MinIO image removal, Milvus GCS/Workload Identity, GraphQL media and Kibana OOM.
 - [GCP Teardown Runbook](./gcp/teardown.md): ordered rollback, stateful data handling, destroy and residual-billing checks.
 - [k6 Load Testing](./load-testing.md): smoke/load/stress/soak profiles, RPS/VU/CCU definitions and reporting rules.
 - [Chatbot Agentic RAG](./chatbot-agentic-rag.md): current LangGraph routes, multimodal retrieval, config and unimplemented provider/action gates.

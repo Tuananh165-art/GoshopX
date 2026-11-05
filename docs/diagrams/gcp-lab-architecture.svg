@@ -12,9 +12,9 @@
 <!-- GKE boundary -->
 <rect class="cloud" x="815" y="55" width="640" height="440" rx="22"/><text class="gcpmark" x="842" y="87">GOOGLE CLOUD · asia-southeast1 · PRIVATE GKE STANDARD</text>
 <rect class="focus" x="850" y="120" width="180" height="92"/><text class="title" x="881" y="158">Kong Gateway</text><text class="sub" x="881" y="182">public API edge</text>
-<rect class="node" x="1105" y="105" width="300" height="120"/><text class="title" x="1130" y="143">Go microservices</text><text class="sub" x="1130" y="168">GraphQL · gRPC · commerce</text><text class="sub" x="1130" y="190">Account · Product · Order · Stock</text>
+<rect class="node" x="1105" y="105" width="300" height="120"/><text class="title" x="1130" y="143">Go microservices</text><text class="sub" x="1130" y="168">GraphQL · gRPC · media proxy</text><text class="sub" x="1130" y="190">Account · Product · Order · Stock</text>
 <rect class="node" x="850" y="280" width="245" height="115"/><text class="title" x="878" y="320">Recommender</text><text class="sub" x="878" y="344">LangGraph · hybrid RAG</text><text class="sub" x="878" y="366">Discovery · compare · image</text>
-<rect class="store" x="1160" y="265" width="245" height="130"/><text class="title" x="1188" y="304">Kafka · Redis · Milvus</text><text class="sub" x="1188" y="329">PVC-backed single replicas</text><text class="sub" x="1188" y="352">lab only · not HA</text><text class="sub" x="1188" y="374">Milvus + etcd + MinIO</text>
+<rect class="store" x="1160" y="265" width="245" height="130"/><text class="title" x="1188" y="304">Kafka · Redis · Milvus</text><text class="sub" x="1188" y="329">PVC-backed single replicas</text><text class="sub" x="1188" y="352">lab only · not HA</text><text class="sub" x="1188" y="374">Milvus + etcd + private GCS</text>
 <rect class="node" x="850" y="425" width="555" height="45"/><text class="sub" x="875" y="453">Argo CD · Prometheus/Grafana · Alloy/Loki · OpenTelemetry/Jaeger</text>
 <path class="edge" d="M755 148H844"/><path class="edge" d="M1030 166H1098"/><path class="edge" d="M1220 225V258"/><path class="edge" d="M1105 167C1050 210 1030 246 1000 275"/><path class="edge-dash" d="M1095 338H1153"/>
 <!-- managed resources -->
@@ -25,7 +25,7 @@
 <!-- delivery + AI -->
 <rect class="focus" x="35" y="545" width="260" height="115"/><text class="title" x="63" y="584">GitHub Actions</text><text class="sub" x="63" y="608">PR gates · image scan · SBOM</text><text class="sub" x="63" y="633">OIDC/WIF · digest promotion PR</text>
 <rect class="node" x="365" y="545" width="230" height="115"/><text class="title" x="394" y="584">External AI tools</text><text class="sub" x="394" y="608">DeepSeek vision / chat</text><text class="sub" x="394" y="633">Gemini embeddings · Tavily</text>
-<rect class="node" x="675" y="545" width="210" height="115"/><text class="title" x="704" y="584">Cloud Storage</text><text class="sub" x="704" y="608">catalog snapshot · logs</text><text class="sub" x="704" y="633">state bucket provision separately</text>
+<rect class="node" x="675" y="545" width="210" height="115"/><text class="title" x="704" y="584">Cloud Storage</text><text class="sub" x="704" y="608">catalog · Milvus · media · logs</text><text class="sub" x="704" y="633">private buckets; state isolated</text>
 <rect class="node" x="965" y="545" width="245" height="115"/><text class="title" x="993" y="584">Cloud Operations</text><text class="sub" x="993" y="608">Logging · Monitoring · budget</text><text class="sub" x="993" y="633">budget sends alerts, not hard cap</text>
 <path class="edge" d="M295 600H358"/><path class="edge" d="M295 530H780V410H850"/><path class="edge-dash" d="M975 545V478"/><path class="edge-dash" d="M785 545C880 505 1000 492 1080 476"/><path class="edge-dash" d="M600 600H667"/>
 <text class="legend" x="35" y="735">Solid: request / delivery flow</text><path class="edge" d="M35 765H100"/><text class="legend" x="120" y="769">Dashed: managed service / telemetry link</text><path class="edge-dash" d="M35 790H100"/><text class="legend" x="1240" y="790">Designed for a 48-hour lab · not HA</text>
