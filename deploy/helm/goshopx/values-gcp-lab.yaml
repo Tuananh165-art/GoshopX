@@ -1,7 +1,7 @@
 global:
   imageRegistry: "asia-southeast1-docker.pkg.dev/generated-mote-467410-b0/goshopx"
   runtimeSecretName: goshopx-runtime
-  ingress: { enabled: false, className: gke-l7-global-external-managed, host: goshopx.click }
+  ingress: {enabled: false, className: gke-l7-global-external-managed, host: goshopx.click}
   gateway:
     enabled: true
     name: goshopx-gateway
@@ -11,13 +11,12 @@ global:
     hostname: goshopx.click
     wwwHostname: www.goshopx.click
   kong:
-    proxyNodePort: { enabled: false, port: 30708 }
-    managementNodePorts: { enabled: false, admin: 30710, manager: 30709 }
+    proxyNodePort: {enabled: false, port: 30708}
+    managementNodePorts: {enabled: false, admin: 30710, manager: 30709}
     managerURL: ""
     managerAPIURL: ""
-  graphqlNodePort: { enabled: false, port: 30712 }
-  networkPolicy: { enabled: false }
-
+  graphqlNodePort: {enabled: false, port: 30712}
+  networkPolicy: {enabled: false}
 infrastructure:
   enabled: true
   cloudSQL:
@@ -26,18 +25,34 @@ infrastructure:
     gcpServiceAccountEmail: "goshopx-runtime@generated-mote-467410-b0.iam.gserviceaccount.com"
     serviceAccountName: goshopx-runtime
     image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
-    resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: 150m, memory: 128Mi } }
+    resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: 150m, memory: 128Mi}}
   storageClass: standard-rwo
-  persistence: { enabled: true }
-  dashboards: { nodePort: false, kafkaUIEnabled: false }
-  nodePorts: { enabled: false }
-
+  persistence: {enabled: true}
+  dashboards: {nodePort: false, kafkaUIEnabled: false}
+  nodePorts: {enabled: false}
 services:
-  admin: { enabled: true }
-  recommender-server: { enabled: true }
-  recommender-sync: { enabled: true, probesEnabled: false }
-  recommender-train: { enabled: false }
-
+  admin: {enabled: true, imageDigest: 'sha256:e01677421e28df0280540e59d108a2052e80b977676982e534807f979ba796bb'}
+  recommender-server: {enabled: true, imageDigest: 'sha256:5f1767ef17643817d717d225f6d2cb2aa503ca05de39c79b0064f40371e2d093'}
+  recommender-sync: {enabled: true, probesEnabled: false, imageDigest: 'sha256:fa0619e5dbf26f1e0ea8b965fbb874a95f8ddb7d21074234bfe7d2771e3dba6a'}
+  recommender-train: {enabled: false, imageDigest: 'sha256:40fe60b2136a215f1e3a914502f73f8daf504459656d06f54d03afabc85c8dff'}
+  account:
+    imageDigest: sha256:a57945409ae3233d22ddbdbd663e86c0f3387cae1dd29390026b2cf9fd09b426
+  cart:
+    imageDigest: sha256:938cad5c92a5bc07d8808881f81bf2d5da398ffbaa96df95cd9e218c2df447c7
+  graphql:
+    imageDigest: sha256:328e724302b3ae076c4f986f0e5ace8f9686939b3f944ff825aad758ddaa8257
+  inventory:
+    imageDigest: sha256:ca78535a269726f2acabb8a466476a199b124107ac5c035fec0f0e093391d4b7
+  notification:
+    imageDigest: sha256:1c82841bf5b54f22334c2784da736b35b78eec9775e3c9b8d176275df834592c
+  order:
+    imageDigest: sha256:bc00845ab0d767d1c327259ad275685cbccd7b438cad53dbbc116839f60f6e6c
+  payment:
+    imageDigest: sha256:37827429365920cbdb9be049c9e240bf440ca1c6ac0b5b61faae803eb02563d0
+  product:
+    imageDigest: sha256:44a1e74f9798877be822c641f85fa395a5ced69e1baddd808f1f9f93e977eed4
+  web:
+    imageDigest: sha256:23edd399bc3f4682ef1a24fafc987aa44b014fb9d3439f1a483516977b0116b5
 config:
   DUMMYJSON_SEED_ENABLED: "true"
   DUMMYJSON_SEED_LIMIT: "0"
@@ -53,8 +68,7 @@ config:
   GEMINI_EMBEDDING_MODEL: gemini-embedding-2
   GEMINI_EMBEDDING_DIMENSION: "768"
   ARTIFACTS_LOCAL_PATH: /tmp/artifacts
-
 observability:
   metricsPort: 9090
-  serviceMonitor: { enabled: true, interval: 30s }
-  tracing: { otlpEndpoint: jaeger:4317 }
+  serviceMonitor: {enabled: true, interval: 30s}
+  tracing: {otlpEndpoint: 'jaeger:4317'}
