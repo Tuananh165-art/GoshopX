@@ -27,7 +27,7 @@ import (
 
 var ErrInvalidParameter = errors.New("invalid parameter")
 
-const codPaymentStatus = "paid"
+const codCheckoutStatus = "pending"
 
 func setSessionCookie(ctx *gin.Context, token string, maxAge int) {
 	// An empty Domain makes this a host-only cookie. Hard-coding localhost
@@ -178,11 +178,11 @@ func (resolver *mutationResolver) RecommendChat(ctx context.Context, in generate
 	return result, nil
 }
 
-const maxChatImageBytes = 3 << 20
+const maxChatImageBytes = 5 << 20
 
 func encodeChatImage(upload graphql.Upload) (string, error) {
 	if upload.File == nil || upload.Size <= 0 || upload.Size > maxChatImageBytes {
-		return "", errors.New("chat image must be between 1 byte and 3 MiB")
+		return "", errors.New("chat image must be between 1 byte and 5 MiB")
 	}
 	contentType := strings.ToLower(strings.TrimSpace(upload.ContentType))
 	allowed := map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true}
@@ -194,7 +194,10 @@ func encodeChatImage(upload graphql.Upload) (string, error) {
 		return "", errors.New("could not read chat image")
 	}
 	if len(data) == 0 || len(data) > maxChatImageBytes {
-		return "", errors.New("chat image exceeds the 3 MiB limit")
+		return "", errors.New("chat image exceeds the 5 MiB limit")
+	}
+	if http.DetectContentType(data[:min(len(data), 512)]) != contentType {
+		return "", errors.New("chat image bytes do not match the declared image type")
 	}
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }
@@ -478,13 +481,10 @@ func (resolver *mutationResolver) CheckoutCartCod(ctx context.Context) (*generat
 			return nil, err
 		}
 	}
-	if err := resolver.server.orderClient.UpdateOrderStatus(ctx, uint64(createdOrder.ID), codPaymentStatus); err != nil {
-		return nil, err
-	}
 	if err := resolver.server.cartClient.CompleteCheckout(ctx, uint64(accountID)); err != nil {
 		return nil, err
 	}
-	return &generated.CODCheckoutResponse{OrderID: int(createdOrder.ID), Status: codPaymentStatus}, nil
+	return &generated.CODCheckoutResponse{OrderID: int(createdOrder.ID), Status: codCheckoutStatus}, nil
 }
 
 func (resolver *mutationResolver) MarkNotificationRead(ctx context.Context, id int) (bool, error) {

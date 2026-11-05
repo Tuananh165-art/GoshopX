@@ -6,7 +6,7 @@
 
 ### GraphQL-first e-commerce microservices with event-driven commerce, operations tooling, and AI-assisted product discovery.
 
-[Documentation](./docs/00-index.md) | [Technical Guide](./docs/27-technical-architecture-and-devops-guide.md) | [ADRs](./docs/adr/) | [K3s Runbook](./docs/23-ubuntu-k3s-step-by-step-deployment.md)
+[Documentation](./docs/00-index.md) | [Technical Guide](./docs/27-technical-architecture-and-devops-guide.md) | [GCP GKE lab](./docs/gcp/README.md) | [GCP deploy step by step](./docs/gcp/deploy-step-by-step.md) | [ADRs](./docs/adr/) | [K3s Runbook](./docs/23-ubuntu-k3s-step-by-step-deployment.md)
 
 </div>
 
@@ -63,6 +63,22 @@
 ## Overview
 
 GoshopX is a full-stack e-commerce reference platform for developers, students, and platform engineers who need a browser-safe API while keeping commerce domains independently owned. React calls GraphQL through Kong; Go services use typed gRPC for immediate internal decisions; Kafka distributes durable business facts; each bounded context owns its persistence. A Python recommender provides ranking and hybrid retrieval without making commerce unavailable when AI artifacts are missing.
+
+> **GCP lab delivery:** Terraform, a separate-project GKE overlay, GitHub OIDC image promotion, architecture assets and a deletion runbook are under active implementation. The lab has not been applied. Secret Manager synchronization, live Gateway reconciliation, provider accounting and production-like commerce recovery remain explicit gates. See [review evidence](./docs/audit/20261105-repository-review.md).
+
+## GCP Architecture
+
+![GoshopX GKE DevSecOps lab architecture](./docs/diagrams/gcp-lab-architecture.png)
+
+Editable source: [HTML/SVG diagram](./docs/diagrams/gcp-lab-architecture.html), [standalone SVG](./docs/diagrams/gcp-lab-architecture.svg), [PNG renderer](./docs/diagrams/render_architecture_png.py). GCP deployment walkthrough and teardown are in [docs/gcp](./docs/gcp/README.md).
+
+## AI Product Assistant
+
+The recommender contains LangGraph Discovery, Recommendation, Cart-advice and Multimodal paths using catalog-grounded hybrid retrieval. Image results come from catalog thumbnails; input images are validated and stripped from persisted browser history. The cart path is advisory and the backend remains authoritative. See [AI RAG status and provider configuration](./docs/chatbot-agentic-rag.md); Tavily/Jev/LangSmith and server-side cart action proposals are not wired yet.
+
+## Load Testing
+
+Use the [k6 profiles and reporting guide](./docs/load-testing.md) for smoke/load/stress/soak runs. CCU, VUs, RPS and concurrent requests differ; no capacity claim is made until measured against a named environment and dataset.
 
 ## Features
 
@@ -204,7 +220,7 @@ Go services expose private Prometheus metrics. ServiceMonitors scrape metrics; G
 - JWTs, passwords, and keys must not appear in logs, README, screenshots, or commits.
 - Payment verifies signed callback data before mutating transaction, order, inventory, or cart state.
 - Kafka consumers handle malformed and duplicate data safely; refund requests use an idempotency key.
-- CI configures TruffleHog verified-secret scanning and Trivy configuration scanning; the release workflow scans images for configured HIGH/CRITICAL findings.
+- CI configures CodeQL analysis, TruffleHog verified-secret scanning and Trivy filesystem/configuration scanning. The GCP release workflow makes these quality/security gates prerequisites for image builds, adds SBOM/provenance, scans images, then opens a digest-promotion PR for Argo CD.
 
 ## Docker and Kubernetes
 

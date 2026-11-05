@@ -8,6 +8,14 @@ global:
     className: traefik
     host: ""
     tlsSecretName: ""
+  gateway:
+    enabled: false
+    name: goshopx-gateway
+    className: gke-l7-global-external-managed
+    staticIpName: goshopx-https
+    certificateMapName: goshopx-map
+    hostname: ""
+    wwwHostname: ""
   kong:
     image: kong:3.9
     proxyNodePort:
@@ -37,6 +45,15 @@ observability:
 
 infrastructure:
   enabled: false
+  cloudSQL:
+    enabled: false
+    instanceConnectionName: ""
+    gcpServiceAccountEmail: ""
+    serviceAccountName: goshopx-runtime
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+    resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: 150m, memory: 128Mi } }
+  persistence:
+    enabled: false
   security:
     # The official PostgreSQL image stores its data as uid/gid 999.  Keep the
     # values configurable for a compatible image upgrade, rather than relying
@@ -142,13 +159,13 @@ services:
     enabled: false
     port: 8080
     command: [python, main.py, server]
-    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY }
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY, DEEPSEEK_API_KEY: DEEPSEEK_API_KEY, GEMINI_API_KEY: GEMINI_API_KEY }
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 750m, memory: 768Mi } }
   recommender-sync:
     enabled: false
     port: 8080
     command: [python, main.py, consumer]
-    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY }
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY, DEEPSEEK_API_KEY: DEEPSEEK_API_KEY, GEMINI_API_KEY: GEMINI_API_KEY }
     resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } }
   recommender-train:
     enabled: false

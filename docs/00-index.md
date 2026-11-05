@@ -4,6 +4,14 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 
 ## Core Documents
 
+- [GCP GKE Terraform Lab](./gcp/README.md): separated-project GKE/Cloud SQL design, budget gate, GitOps setup, DNS cutover and evidence limits.
+- [GCP Deploy Step by Step](./gcp/deploy-step-by-step.md): Windows PowerShell sequence from preflight, Terraform/state/secrets, GKE Secret Sync and Argo CD through catalog, domain, acceptance and cleanup gates.
+- [GCP Teardown Runbook](./gcp/teardown.md): ordered rollback, stateful data handling, destroy and residual-billing checks.
+- [k6 Load Testing](./load-testing.md): smoke/load/stress/soak profiles, RPS/VU/CCU definitions and reporting rules.
+- [Chatbot Agentic RAG](./chatbot-agentic-rag.md): current LangGraph routes, multimodal retrieval, config and unimplemented provider/action gates.
+- [Repository Review](./audit/20261105-repository-review.md): evidence, fixed defects and unresolved audit items.
+- [GCP Architecture Diagram](./diagrams/gcp-lab-architecture.html): editable themed HTML source with standalone SVG, PNG and renderer.
+
 - [BMAD Operating Model](./01-bmad-operating-model.md): role workflow from business idea to verified release.
 - [Agile/Scrum Delivery Guide](./02-agile-scrum-delivery.md): ceremonies, artifacts, definition of ready, and definition of done.
 - [Business Domain Rules](./03-business-domain-rules.md): e-commerce business vocabulary, invariants, and acceptance rules.
@@ -33,6 +41,8 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 - [ADR-20260730 Admin Commerce Read Model](./adr/ADR-20260730-admin-commerce-read-model.md): cross-domain reporting and command ownership.
 - [Admin Commerce Implementation Status](./17-admin-commerce-implementation-status.md): delivered reporting slice and remaining integration work.
 - [ADR-20260808 K3s GitOps Lab Platform](./adr/ADR-20260808-lab-k3s-gitops-platform.md): delivery boundaries, resource trade-offs and verification strategy.
+- [ADR-20261105 GCP Lab Platform](./adr/ADR-20261105-gcp-lab-platform.md): GKE/Cloud SQL ownership, time/budget gates and limitations.
+- [ADR-20261105 Shopping Agentic RAG](./adr/ADR-20261105-chat-agentic-rag.md): retrieval grounding, modality embeddings and commerce action boundary.
 
 ## Repo-Local Agent Assets
 

@@ -15,23 +15,25 @@ class Candidate:
 
 
 class HybridRetriever:
-    def __init__(self, *, dense_search: Callable[[Any], Iterable[Candidate]], lexical_search: Callable[[Any], Iterable[Candidate]], catalog: dict[str, dict[str, Any]]):
+    def __init__(self, *, dense_search: Callable[[Any], Iterable[Candidate]], lexical_search: Callable[[Any], Iterable[Candidate]], catalog: dict[str, dict[str, Any]], image_search: Callable[[list[float]], Iterable[Candidate]] | None = None):
         self._dense_search = dense_search
         self._lexical_search = lexical_search
         self._catalog = catalog
+        self._image_search = image_search
         self._hybrid_chain = RunnableParallel(
             dense=RunnableLambda(lambda plan: list(self._dense_search(plan))),
             lexical=RunnableLambda(lambda plan: list(self._lexical_search(plan))),
         )
 
-    def search(self, plan: Any, *, limit: int = 5, excluded_ids: set[str] | None = None) -> list[dict[str, Any]]:
+    def search(self, plan: Any, *, limit: int = 5, excluded_ids: set[str] | None = None, image_vector: list[float] | None = None) -> list[dict[str, Any]]:
         excluded_ids = excluded_ids or set()
         candidates = self._hybrid_chain.invoke(plan)
         dense = candidates["dense"]
         lexical = candidates["lexical"]
-        fused_ids = reciprocal_rank_fusion([[c.product_id for c in dense], [c.product_id for c in lexical]])
+        visual = list(self._image_search(image_vector)) if image_vector and self._image_search else []
+        fused_ids = reciprocal_rank_fusion([[c.product_id for c in dense], [c.product_id for c in lexical], [c.product_id for c in visual]])
         raw_scores: dict[str, float] = {}
-        for candidate in [*dense, *lexical]:
+        for candidate in [*dense, *lexical, *visual]:
             raw_scores[candidate.product_id] = max(raw_scores.get(candidate.product_id, 0.0), candidate.score)
 
         result: list[dict[str, Any]] = []

@@ -58,6 +58,20 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(response.products, [])
         self.assertEqual(response.answer, INJECTION_REFUSAL)
 
+    def test_cart_route_never_promises_backend_mutation(self):
+        class CapturingLLM:
+            prompt = ""
+
+            def complete_json(self, system_prompt, user_prompt):
+                self.prompt = system_prompt
+                return {"answer": "Review the items before adding them.", "product_ids": ["p1"]}
+
+        llm = CapturingLLM()
+        service = ChatService(retriever=self.retriever, llm=llm)
+        response = service.reply(ChatRequest(text="build a cart with this laptop"))
+        self.assertIn("cannot mutate a cart", llm.prompt)
+        self.assertEqual([item["id"] for item in response.products], ["p1"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,8 @@ from shared.config.settings import (
     AI_API_KEY,
     AI_ENDPOINT,
     AI_MODEL,
+    GEMINI_API_KEY,
+    GEMINI_EMBEDDING_MODEL,
     INTERACTION_EVENTS_TOPIC,
     INVENTORY_EVENTS_TOPIC,
     KAFKA_SERVER,
@@ -47,6 +49,8 @@ def _get_indexer() -> ProductIndexer:
             image_collection=f"{MILVUS_COLLECTION}_images",
             dimension=TEXT_EMBEDDING_DIMENSION,
             vision_llm=vision_llm,
+            gemini_api_key=GEMINI_API_KEY,
+            gemini_model=GEMINI_EMBEDDING_MODEL,
         )
     return _indexer
 

@@ -57,7 +57,10 @@ export function RecommendationChatPage({ embedded = false }: { embedded?: boolea
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(HISTORY_KEY)
-      if (saved) setMessages(JSON.parse(saved) as Message[])
+      if (saved) {
+        const history = JSON.parse(saved) as Message[]
+        setMessages(history.map(({ imageDataUrl: _imageDataUrl, ...message }) => message))
+      }
     } catch {
       window.localStorage.removeItem(HISTORY_KEY)
     } finally {
@@ -68,7 +71,7 @@ export function RecommendationChatPage({ embedded = false }: { embedded?: boolea
   useEffect(() => {
     if (!historyReady) return
     try {
-      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(messages))
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.map(({ imageDataUrl: _imageDataUrl, ...message }) => message)))
     } catch {
       // A full localStorage quota must not prevent chat responses.
     }
@@ -76,6 +79,13 @@ export function RecommendationChatPage({ embedded = false }: { embedded?: boolea
 
   async function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0] || null
+    if (selected && selected.size > 5 * 1024 * 1024) {
+      setImage(null)
+      setImagePreview('')
+      setError('Ảnh tải lên tối đa 5 MiB.')
+      event.target.value = ''
+      return
+    }
     setImage(selected)
     if (selected) {
       try {
@@ -98,7 +108,7 @@ export function RecommendationChatPage({ embedded = false }: { embedded?: boolea
     event.preventDefault()
     if (!text.trim() && !image) return
     const requestText = text.trim()
-    setMessages(current => [...current, { role: 'user', text: requestText || `Tìm sản phẩm theo hình ảnh ${image?.name || 'đã tải lên'}.`, imageDataUrl: imagePreview, imageName: image?.name }])
+    setMessages(current => [...current, { role: 'user', text: requestText || `Tìm sản phẩm theo hình ảnh ${image?.name || 'đã tải lên'}.`, imageName: image?.name }])
     setText('')
     setError('')
     setPending(true)

@@ -10,21 +10,25 @@ global:
     # Keep proxy/Admin/Manager ClusterIP by default. Use Traefik ingress for the
     # proxy; expose management UIs via port-forward until firewall allowlists
     # and HTTPS/operator auth are in place.
-    proxyNodePort: { enabled: true, port: 30708 }
-    managementNodePorts: { enabled: true, admin: 30710, manager: 30709 }
+    proxyNodePort: { enabled: false, port: 30708 }
+    managementNodePorts: { enabled: false, admin: 30710, manager: 30709 }
     # Kong is the public edge. Keep its memory bounded without allowing the
     # cache and worker defaults to exhaust the small lab node.
     nginxWorkerProcesses: "1"
     memCacheSize: 64m
     resources: { requests: { cpu: 75m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
-  graphqlNodePort: { enabled: true, port: 30712 }
+  graphqlNodePort: { enabled: false, port: 30712 }
 
 infrastructure:
   enabled: true
+  cloudSQL:
+    enabled: false
   dashboards:
-    nodePort: true
+    nodePort: false
   nodePorts:
-    enabled: true
+    enabled: false
+  storageClass: local-path
+  kafkaUIEnabled: false
 
 # This value is updated by .github/workflows/release-gitops.yml after an image
 # is published. Use a commit SHA only; never deploy mutable `latest` in GitOps.
@@ -46,12 +50,16 @@ config:
   # This supplies visible products, categories, and remote image URLs without
   # enabling the heavier recommender workload.
   DUMMYJSON_SEED_ENABLED: "true"
-  DUMMYJSON_SEED_LIMIT: "100"
+  DUMMYJSON_SEED_LIMIT: "0"
   # DummyJSON prices are USD. GoshopX stores and displays product prices in VND.
   DUMMYJSON_PRICE_VND_RATE: "25000"
   PRODUCT_API: http://product:8081/products
-  AI_ENDPOINT: "https://opencode.ai/zen/go/v1/chat/completions"
-  AI_MODEL: "kimi-k2.6"
+  AI_ENDPOINT: "https://api.deepseek.com/chat/completions"
+  AI_MODEL: "deepseek-flash"
+  MILVUS_COLLECTION: product_catalog_gemini_v2
+  TEXT_EMBEDDING_DIMENSION: "768"
+  IMAGE_EMBEDDING_DIMENSION: "768"
+  GEMINI_EMBEDDING_MODEL: gemini-embedding-2
   AI_TIMEOUT_SECONDS: "30"
   AI_MAX_RETRIES: "2"
   # The chart mounts /tmp as an emptyDir while the container root filesystem is

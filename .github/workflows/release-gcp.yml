@@ -1,0 +1,210 @@
+name: GCP lab image build, scan and GitOps promotion
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', 'deploy/helm/goshopx/values-gcp-lab.yaml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gcp-lab-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.6"
+          cache: true
+      - run: |
+          test -z "$(gofmt -l $(find . -name '*.go' -not -path './.gocache/*' -not -path './.gomodcache/*'))"
+          packages=$(go list ./... | grep -v '/tests/e2e$')
+          go vet $packages
+          go test -race -count=1 $packages
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v6
+      - working-directory: recommender
+        run: uv sync --locked
+      - working-directory: recommender
+        env:
+          PYTHONPATH: app
+        run: uv run python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci
+      - working-directory: web
+        run: npm test -- --run
+      - working-directory: web
+        run: npm run build
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.22.1
+      - run: |
+          helm lint deploy/helm/goshopx -f deploy/helm/goshopx/values-gcp-lab.yaml
+          helm template goshopx deploy/helm/goshopx -n goshopx -f deploy/helm/goshopx/values.yaml -f deploy/helm/goshopx/values-gcp-lab.yaml > /tmp/goshopx-gcp.yaml
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: /tmp/goshopx-gcp.yaml
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: hashicorp/setup-terraform@v3
+      - working-directory: infra/gcp
+        run: terraform fmt -check -recursive
+      - working-directory: infra/gcp
+        run: terraform init -backend=false
+      - working-directory: infra/gcp
+        run: terraform validate
+
+  security:
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: go, python, javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@v3
+      - name: Scan pushed commits for verified secrets
+        if: github.event_name == 'push'
+        uses: trufflesecurity/trufflehog@v3.88.5
+        with:
+          path: ./
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+          extra_args: --only-verified
+      - name: Scan repository for verified secrets
+        if: github.event_name == 'workflow_dispatch'
+        uses: trufflesecurity/trufflehog@v3.88.5
+        with:
+          path: ./
+          extra_args: --only-verified
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  build-scan:
+    needs: [quality, security]
+    runs-on: ubuntu-latest
+    environment: lab
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { service: account, dockerfile: account }
+          - { service: product, dockerfile: product }
+          - { service: order, dockerfile: order }
+          - { service: payment, dockerfile: payment }
+          - { service: inventory, dockerfile: inventory }
+          - { service: cart, dockerfile: cart }
+          - { service: notification, dockerfile: notification }
+          - { service: admin, dockerfile: admin }
+          - { service: graphql, dockerfile: graphql }
+          - { service: web, dockerfile: web }
+          - { service: recommender-server, dockerfile: recommender }
+          - { service: recommender-sync, dockerfile: recommender }
+          - { service: recommender-train, dockerfile: recommender }
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_RELEASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Artifact Registry auth
+        run: gcloud auth configure-docker "${{ vars.GCP_AR_LOCATION }}-docker.pkg.dev" --quiet
+      - uses: docker/setup-buildx-action@v3
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/${{ matrix.dockerfile }}.dockerfile
+          push: true
+          tags: ${{ vars.GCP_AR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_AR_REPOSITORY }}/goshopx-${{ matrix.service }}:${{ github.sha }}
+          build-args: VITE_GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ vars.GCP_AR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_AR_REPOSITORY }}/goshopx-${{ matrix.service }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Save immutable image digest
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          SERVICE: ${{ matrix.service }}
+        run: printf '%s' "$IMAGE_DIGEST" > "${SERVICE}.digest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.service }}
+          path: ${{ matrix.service }}.digest
+          if-no-files-found: error
+          retention-days: 2
+
+  promote:
+    needs: build-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    environment: lab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+      - uses: mikefarah/yq@v4
+      - name: Promote digests through Git
+        shell: bash
+        run: |
+          for file in digests/digest-*/*.digest; do
+            service="$(basename "$(dirname "$file")" | sed 's/^digest-//')"
+            digest="$(cat "$file")"
+            IMAGE_DIGEST="$digest" yq -i ".services.\"$service\".imageDigest = strenv(IMAGE_DIGEST)" deploy/helm/goshopx/values-gcp-lab.yaml
+          done
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: gitops/gcp-lab-${{ github.sha }}
+          delete-branch: true
+          commit-message: "chore(gitops): promote GCP lab image digests"
+          title: "chore(gitops): promote GCP lab image digests"
+          body: "Promotes images built and scanned by the GCP release workflow. Review the generated image digests before merging."
+          add-paths: deploy/helm/goshopx/values-gcp-lab.yaml

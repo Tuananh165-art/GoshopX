@@ -9,7 +9,7 @@ import time
 from chat.llm_client import LLMClient, LLMConfigurationError
 from chat.service import ChatService
 from retrieval.hybrid import Candidate, HybridRetriever
-from shared.config.settings import AI_API_KEY, AI_ENDPOINT, AI_MAX_RETRIES, AI_MODEL, AI_TIMEOUT_SECONDS, MILVUS_COLLECTION, MILVUS_URI, TEXT_EMBEDDING_DIMENSION
+from shared.config.settings import AI_API_KEY, AI_ENDPOINT, AI_MAX_RETRIES, AI_MODEL, AI_TIMEOUT_SECONDS, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL, MILVUS_COLLECTION, MILVUS_URI, TEXT_EMBEDDING_DIMENSION
 from shared.db.models import Product
 from shared.db.session import get_session
 from vector.indexer import ProductIndexer, build_product_indexer
@@ -113,6 +113,8 @@ def load_chat_service() -> ChatService:
             image_collection=f"{MILVUS_COLLECTION}_images",
             dimension=TEXT_EMBEDDING_DIMENSION,
             vision_llm=llm,
+            gemini_api_key=GEMINI_API_KEY,
+            gemini_model=GEMINI_EMBEDDING_MODEL,
         )
     except Exception:
         logger.exception("Milvus unavailable; using lexical fallback")
@@ -130,5 +132,7 @@ def load_chat_service() -> ChatService:
             logger.exception("Milvus search failed; using lexical fallback")
             return fallback
 
-    retriever = HybridRetriever(dense_search=dense_search, lexical_search=search, catalog=catalog)
-    return ChatService(retriever=retriever, llm=llm)
+    visual_search = (lambda vector: indexer.indexes.image_search_by_vector(vector, limit=30)) if indexer and GEMINI_API_KEY else None
+    image_query_embedding = (lambda data_url: indexer.embeddings.embed_image_data_url(data_url)) if indexer and GEMINI_API_KEY else None
+    retriever = HybridRetriever(dense_search=dense_search, lexical_search=search, catalog=catalog, image_search=visual_search)
+    return ChatService(retriever=retriever, llm=llm, image_query_embedding=image_query_embedding)

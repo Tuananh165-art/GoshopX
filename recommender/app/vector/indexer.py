@@ -6,7 +6,7 @@ from typing import Any
 
 from chat.llm_client import LLMClient
 from vector.documents import ProductDocument, build_product_document
-from vector.embeddings import HashEmbedding
+from vector.embeddings import GeminiCatalogImageEmbedding, GeminiEmbedding, HashEmbedding
 from vector.langchain_milvus import LangChainMilvusIndexes
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ProductIndexer:
     indexes: LangChainMilvusIndexes
-    embeddings: HashEmbedding
+    embeddings: Any
     vision_llm: LLMClient | None = None
 
     def upsert(self, product: dict[str, Any]) -> None:
@@ -43,13 +43,16 @@ class ProductIndexer:
             self.indexes.image.delete(expr=f'product_id == "{str(product_id).replace(chr(34), "")}"')
 
 
-def build_product_indexer(*, uri: str, collection: str, image_collection: str, dimension: int, vision_llm: LLMClient | None = None) -> ProductIndexer:
-    embeddings = HashEmbedding(dimension)
+def build_product_indexer(*, uri: str, collection: str, image_collection: str, dimension: int, vision_llm: LLMClient | None = None, gemini_api_key: str = "", gemini_model: str = "gemini-embedding-2") -> ProductIndexer:
+    if not gemini_api_key and collection.startswith("product_catalog_gemini_"):
+        raise ValueError("Gemini API key is required for a Gemini vector collection")
+    embeddings = GeminiEmbedding(gemini_api_key, model=gemini_model, dimension=dimension) if gemini_api_key else HashEmbedding(dimension)
+    image_embeddings = GeminiCatalogImageEmbedding(embeddings) if gemini_api_key else embeddings
     indexes = LangChainMilvusIndexes.connect(
         uri=uri,
         text_collection=collection,
         image_collection=image_collection,
         text_embeddings=embeddings,
-        image_embeddings=embeddings,
+        image_embeddings=image_embeddings,
     )
     return ProductIndexer(indexes=indexes, embeddings=embeddings, vision_llm=vision_llm)

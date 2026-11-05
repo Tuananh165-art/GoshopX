@@ -19,6 +19,7 @@ class EmbeddingProvider(Protocol):
 class LangChainMilvusIndexes:
     text: Any
     image: Any | None
+    image_embeddings_are_urls: bool = False
 
     @classmethod
     def connect(
@@ -73,7 +74,11 @@ class LangChainMilvusIndexes:
                 enable_dynamic_field=False,
                 metadata_field="metadata",
             )
-        return cls(text=text_store, image=image_store)
+        return cls(
+            text=text_store,
+            image=image_store,
+            image_embeddings_are_urls=bool(getattr(image_embeddings, "catalog_image_urls", False)),
+        )
 
     def upsert(self, documents: list[ProductDocument]) -> None:
         from langchain_core.documents import Document
@@ -89,7 +94,9 @@ class LangChainMilvusIndexes:
             for document in documents:
                 descriptions = document.image_descriptions or (document.text,)
                 for index, url in enumerate(document.image_urls):
-                    description = descriptions[index] if index < len(descriptions) else document.text
+                    description = f"image:{url}" if self.image_embeddings_are_urls else (
+                        descriptions[index] if index < len(descriptions) else document.text
+                    )
                     image_docs.append(Document(page_content=description, metadata={**document.metadata, "image_url": url}))
                     image_ids.append(f"{document.product_id}:{index}")
             if image_docs:
@@ -113,4 +120,14 @@ class LangChainMilvusIndexes:
             for doc, score in self.image.similarity_search_with_score(query, k=limit):
                 product_id = str(doc.metadata["product_id"])
                 scores[product_id] = max(scores.get(product_id, 0.0), float(score))
+        return [Candidate(product_id, score) for product_id, score in sorted(scores.items(), key=lambda item: -item[1])]
+
+    def image_search_by_vector(self, vector: list[float], *, limit: int = 20) -> list[Candidate]:
+        if not self.image:
+            return []
+        scores: dict[str, float] = {}
+        for doc, score in self.image.similarity_search_with_score_by_vector(vector, k=limit):
+            product_id = str(doc.metadata["product_id"])
+            # Milvus returns cosine distance here; lower distance ranks first.
+            scores[product_id] = max(scores.get(product_id, float("-inf")), -float(score))
         return [Candidate(product_id, score) for product_id, score in sorted(scores.items(), key=lambda item: -item[1])]

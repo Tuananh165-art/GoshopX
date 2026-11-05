@@ -42,9 +42,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
+        with:
+          version: v3.22.1
       - run: |
           helm lint deploy/helm/goshopx -f deploy/helm/goshopx/values-lab.yaml
           helm template goshopx deploy/helm/goshopx -f deploy/helm/goshopx/values-lab.yaml > /tmp/goshopx.yaml
+          helm lint deploy/helm/goshopx -f deploy/helm/goshopx/values-gcp-lab.yaml
+          helm template goshopx deploy/helm/goshopx -n goshopx -f deploy/helm/goshopx/values.yaml -f deploy/helm/goshopx/values-gcp-lab.yaml > /tmp/goshopx-gcp.yaml
 
   security:
     name: Secret and configuration scan
@@ -80,6 +84,8 @@ jobs:
           path: ./
           extra_args: --only-verified
       - uses: azure/setup-helm@v4
+        with:
+          version: v3.22.1
       - name: Render Helm manifests for configuration scanning
         run: >-
           helm template goshopx deploy/helm/goshopx

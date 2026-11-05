@@ -35,7 +35,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: "{{ $.Values.global.imageRegistry }}/goshopx-{{ $name }}:{{ $.Values.image.tag }}"
+          image: "{{ $.Values.global.imageRegistry }}/goshopx-{{ $name }}{{ if $service.imageDigest }}@{{ $service.imageDigest }}{{ else }}:{{ $.Values.image.tag }}{{ end }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           {{- with $service.command }}
           command:

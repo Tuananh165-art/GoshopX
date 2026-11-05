@@ -1,0 +1,40 @@
+{{- if .Values.global.gateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.global.gateway.name }}
+  annotations:
+    networking.gke.io/certmap: {{ .Values.global.gateway.certificateMapName | quote }}
+spec:
+  gatewayClassName: {{ .Values.global.gateway.className }}
+  addresses:
+    - type: NamedAddress
+      value: {{ .Values.global.gateway.staticIpName | quote }}
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostnames:
+        - {{ required "global.gateway.hostname required" .Values.global.gateway.hostname | quote }}
+        - {{ required "global.gateway.wwwHostname required" .Values.global.gateway.wwwHostname | quote }}
+      allowedRoutes:
+        namespaces: { from: Same }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: goshopx-public
+spec:
+  parentRefs:
+    - name: {{ .Values.global.gateway.name }}
+      sectionName: https
+  hostnames:
+    - {{ required "global.gateway.hostname required" .Values.global.gateway.hostname | quote }}
+    - {{ required "global.gateway.wwwHostname required" .Values.global.gateway.wwwHostname | quote }}
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      backendRefs:
+        - name: kong-proxy
+          port: 8000
+{{- end }}

@@ -23,15 +23,20 @@ S3_REGION = os.getenv("S3_REGION", "auto")
 
 GRPC_PORT = int(os.getenv("GRPC_PORT", "8080"))
 
-AI_ENDPOINT = os.getenv("AI_ENDPOINT", "https://opencode.ai/zen/go/v1/chat/completions")
-AI_API_KEY = os.getenv("AI_API_KEY", "")
-AI_MODEL = os.getenv("AI_MODEL", "deepseek-v4-flash")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+AI_ENDPOINT = os.getenv("DEEPSEEK_BASE_URL", os.getenv("AI_ENDPOINT", "https://api.deepseek.com/chat/completions"))
+AI_API_KEY = DEEPSEEK_API_KEY or os.getenv("AI_API_KEY", "")
+AI_MODEL = os.getenv("DEEPSEEK_MODEL", os.getenv("AI_MODEL", "deepseek-flash"))
 AI_TIMEOUT_SECONDS = float(os.getenv("AI_TIMEOUT_SECONDS", "30"))
 AI_MAX_RETRIES = int(os.getenv("AI_MAX_RETRIES", "2"))
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
+GEMINI_EMBEDDING_DIMENSION = int(os.getenv("GEMINI_EMBEDDING_DIMENSION", "768"))
 
 MILVUS_URI = os.getenv("MILVUS_URI", "http://milvus:19530")
 MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "")
-MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "product_catalog_v1")
-TEXT_EMBEDDING_DIMENSION = int(os.getenv("TEXT_EMBEDDING_DIMENSION", "512"))
-IMAGE_EMBEDDING_DIMENSION = int(os.getenv("IMAGE_EMBEDDING_DIMENSION", "512"))
+MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "product_catalog_gemini_v2" if GEMINI_API_KEY else "product_catalog_hash_v1")
+_DEFAULT_VECTOR_DIMENSION = GEMINI_EMBEDDING_DIMENSION if GEMINI_API_KEY else 512
+TEXT_EMBEDDING_DIMENSION = int(os.getenv("TEXT_EMBEDDING_DIMENSION", str(_DEFAULT_VECTOR_DIMENSION)))
+IMAGE_EMBEDDING_DIMENSION = int(os.getenv("IMAGE_EMBEDDING_DIMENSION", str(_DEFAULT_VECTOR_DIMENSION)))
 

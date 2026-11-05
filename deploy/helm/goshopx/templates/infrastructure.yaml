@@ -2,6 +2,7 @@
 {{- /* The single-node lab deliberately uses one replica per dependency. */}}
 {{- $dashType := ternary "NodePort" "ClusterIP" .Values.infrastructure.dashboards.nodePort }}
 {{- $operatorNodePorts := .Values.infrastructure.nodePorts }}
+{{- if not .Values.infrastructure.cloudSQL.enabled }}
 {{- range $name := list "account-db" "order-db" "payment-db" "inventory-db" "notification-db" "admin-db" "recommender-db" }}
 ---
 apiVersion: v1
@@ -60,15 +61,18 @@ spec:
         storageClassName: {{ $.Values.infrastructure.storageClass }}
         resources: { requests: { storage: 2Gi } }
 {{- end }}
+{{- end }}
 {{- range $name, $component := dict
-  "redis" (dict "image" "redis:7.4-alpine" "port" 6379 "command" (list "redis-server" "--appendonly" "yes"))
-  "kafka" (dict "image" "docker.io/apache/kafka:4.1.1" "port" 9092 "extraPorts" (list (dict "name" "controller" "port" 9093)) "env" (dict "KAFKA_NODE_ID" "1" "KAFKA_PROCESS_ROLES" "broker,controller" "KAFKA_LISTENERS" "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093" "KAFKA_ADVERTISED_LISTENERS" "PLAINTEXT://kafka:9092" "KAFKA_CONTROLLER_LISTENER_NAMES" "CONTROLLER" "KAFKA_CONTROLLER_QUORUM_VOTERS" "1@kafka:9093" "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP" "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR" "1"))
+  "redis" (dict "image" "redis:7.4-alpine" "port" 6379 "command" (list "redis-server" "--appendonly" "yes") "persistence" (dict "mountPath" "/data" "size" "2Gi"))
+  "kafka" (dict "image" "docker.io/apache/kafka:4.1.1" "port" 9092 "extraPorts" (list (dict "name" "controller" "port" 9093)) "persistence" (dict "mountPath" "/tmp/kafka-logs" "size" "8Gi") "env" (dict "KAFKA_NODE_ID" "1" "KAFKA_PROCESS_ROLES" "broker,controller" "KAFKA_LISTENERS" "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093" "KAFKA_ADVERTISED_LISTENERS" "PLAINTEXT://kafka:9092" "KAFKA_CONTROLLER_LISTENER_NAMES" "CONTROLLER" "KAFKA_CONTROLLER_QUORUM_VOTERS" "1@kafka:9093" "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP" "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR" "1"))
   "product-db" (dict "image" "docker.elastic.co/elasticsearch/elasticsearch-oss:6.2.4" "port" 9200 "env" (dict "discovery.type" "single-node" "ES_JAVA_OPTS" "-Xms256m -Xmx256m" "path.data" "/usr/share/elasticsearch/data") "resources" $.Values.infrastructure.productDatabase.resources "persistence" (dict "mountPath" "/usr/share/elasticsearch/data" "size" $.Values.infrastructure.productDatabase.persistence.size))
-  "minio" (dict "image" "minio/minio:RELEASE.2025-04-22T22-12-26Z" "port" 9000 "command" (list "minio" "server" "/data" "--console-address" ":9001"))
-  "milvus-etcd" (dict "image" "quay.io/coreos/etcd:v3.5.18" "port" 2379 "command" (list "etcd" "--advertise-client-urls=http://milvus-etcd:2379" "--listen-client-urls=http://0.0.0.0:2379" "--data-dir" "/etcd"))
-  "milvus-minio" (dict "image" "minio/minio:RELEASE.2025-04-22T22-12-26Z" "port" 9000 "command" (list "minio" "server" "/minio_data"))
-  "milvus" (dict "image" "milvusdb/milvus:v2.5.10" "port" 19530 "runAsUser" 1000 "runAsGroup" 0 "fsGroup" 0 "command" (list "/milvus/bin/milvus" "run" "standalone") "env" (dict "ETCD_ENDPOINTS" "milvus-etcd:2379" "MINIO_ADDRESS" "milvus-minio:9000"))
+  "minio" (dict "image" "minio/minio:RELEASE.2025-04-22T22-12-26Z" "port" 9000 "command" (list "minio" "server" "/data" "--console-address" ":9001") "persistence" (dict "mountPath" "/data" "size" "2Gi"))
+  "milvus-etcd" (dict "image" "quay.io/coreos/etcd:v3.5.18" "port" 2379 "command" (list "etcd" "--advertise-client-urls=http://milvus-etcd:2379" "--listen-client-urls=http://0.0.0.0:2379" "--data-dir" "/etcd") "persistence" (dict "mountPath" "/etcd" "size" "2Gi"))
+  "milvus-minio" (dict "image" "minio/minio:RELEASE.2025-04-22T22-12-26Z" "port" 9000 "command" (list "minio" "server" "/minio_data") "persistence" (dict "mountPath" "/minio_data" "size" "2Gi"))
+  "milvus" (dict "image" "milvusdb/milvus:v2.5.10" "port" 19530 "runAsUser" 1000 "runAsGroup" 0 "fsGroup" 0 "command" (list "/milvus/bin/milvus" "run" "standalone") "persistence" (dict "mountPath" "/var/lib/milvus" "size" "4Gi") "env" (dict "ETCD_ENDPOINTS" "milvus-etcd:2379" "MINIO_ADDRESS" "milvus-minio:9000"))
  }}
+{{- $persist := or (eq $name "product-db") $.Values.infrastructure.persistence.enabled }}
+{{- if and $persist $component.persistence }}
 {{- with $persistence := $component.persistence }}
 ---
 apiVersion: v1
@@ -78,6 +82,7 @@ spec:
   accessModes: [ReadWriteOnce]
   storageClassName: {{ $.Values.infrastructure.storageClass }}
   resources: { requests: { storage: {{ $persistence.size }} } }
+{{- end }}
 {{- end }}
 ---
 apiVersion: apps/v1
@@ -100,7 +105,7 @@ spec:
       volumes:
         - name: runtime
           emptyDir: {}
-        {{- if eq $name "redis" }}
+        {{- if and (eq $name "redis") (not $persist) }}
         - name: redis-data
           emptyDir: {}
         {{- end }}
@@ -110,32 +115,36 @@ spec:
         # read-only root filesystem.
         - name: kafka-config
           emptyDir: {}
+        {{- if not $persist }}
         - name: kafka-logs
           emptyDir: {}
+        {{- end }}
         # Kafka writes JVM GC logs beneath its installation root.
         - name: kafka-jvm-logs
           emptyDir: {}
         {{- end }}
-        {{- if eq $name "minio" }}
+        {{- if and (eq $name "minio") (not $persist) }}
         - name: minio-data
           emptyDir: {}
         {{- end }}
-        {{- if eq $name "milvus-etcd" }}
+        {{- if and (eq $name "milvus-etcd") (not $persist) }}
         - name: etcd-data
           emptyDir: {}
         {{- end }}
-        {{- if eq $name "milvus-minio" }}
+        {{- if and (eq $name "milvus-minio") (not $persist) }}
         - name: milvus-minio-data
           emptyDir: {}
         {{- end }}
-        {{- if eq $name "milvus" }}
+        {{- if and (eq $name "milvus") (not $persist) }}
         - name: milvus-data
           emptyDir: {}
         {{- end }}
+        {{- if and $persist $component.persistence }}
         {{- with $component.persistence }}
         - name: data
           persistentVolumeClaim:
             claimName: {{ $name }}-data
+        {{- end }}
         {{- end }}
       containers:
         - name: {{ $name }}
@@ -148,37 +157,41 @@ spec:
           volumeMounts:
             - name: runtime
               mountPath: /tmp
-            {{- if eq $name "redis" }}
+            {{- if and (eq $name "redis") (not $persist) }}
             - name: redis-data
               mountPath: /data
             {{- end }}
             {{- if eq $name "kafka" }}
             - name: kafka-config
               mountPath: /opt/kafka/config
+            {{- if not $persist }}
             - name: kafka-logs
               mountPath: /tmp/kafka-logs
+            {{- end }}
             - name: kafka-jvm-logs
               mountPath: /opt/kafka/logs
             {{- end }}
-            {{- if eq $name "minio" }}
+            {{- if and (eq $name "minio") (not $persist) }}
             - name: minio-data
               mountPath: /data
             {{- end }}
-            {{- if eq $name "milvus-etcd" }}
+            {{- if and (eq $name "milvus-etcd") (not $persist) }}
             - name: etcd-data
               mountPath: /etcd
             {{- end }}
-            {{- if eq $name "milvus-minio" }}
+            {{- if and (eq $name "milvus-minio") (not $persist) }}
             - name: milvus-minio-data
               mountPath: /minio_data
             {{- end }}
-            {{- if eq $name "milvus" }}
+            {{- if and (eq $name "milvus") (not $persist) }}
             - name: milvus-data
               mountPath: /var/lib/milvus
             {{- end }}
+            {{- if and $persist $component.persistence }}
             {{- with $component.persistence }}
             - name: data
               mountPath: {{ .mountPath }}
+            {{- end }}
             {{- end }}
           {{- with $component.command }}
           command: {{ toYaml . | nindent 12 }}
@@ -188,9 +201,15 @@ spec:
           {{- range $extra := $component.extraPorts }}
             - { name: {{ $extra.name }}, containerPort: {{ $extra.port }} }
           {{- end }}
-          {{- with $component.env }}
+          {{- if or (eq $name "minio") $component.env }}
           env:
-          {{- range $key, $value := . }}
+            {{- if eq $name "minio" }}
+            - name: MINIO_ROOT_USER
+              valueFrom: { secretKeyRef: { name: {{ $.Values.global.runtimeSecretName }}, key: MINIO_ACCESS_KEY } }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $.Values.global.runtimeSecretName }}, key: MINIO_SECRET_KEY } }
+            {{- end }}
+          {{- range $key, $value := $component.env }}
             - { name: {{ $key }}, value: {{ $value | quote }} }
           {{- end }}
           {{- end }}

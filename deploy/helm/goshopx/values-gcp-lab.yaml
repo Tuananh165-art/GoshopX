@@ -1,0 +1,60 @@
+global:
+  imageRegistry: "asia-southeast1-docker.pkg.dev/generated-mote-467410-b0/goshopx"
+  runtimeSecretName: goshopx-runtime
+  ingress: { enabled: false, className: gke-l7-global-external-managed, host: goshopx.click }
+  gateway:
+    enabled: true
+    name: goshopx-gateway
+    className: gke-l7-global-external-managed
+    staticIpName: goshopx-https
+    certificateMapName: goshopx-map
+    hostname: goshopx.click
+    wwwHostname: www.goshopx.click
+  kong:
+    proxyNodePort: { enabled: false, port: 30708 }
+    managementNodePorts: { enabled: false, admin: 30710, manager: 30709 }
+    managerURL: ""
+    managerAPIURL: ""
+  graphqlNodePort: { enabled: false, port: 30712 }
+  networkPolicy: { enabled: false }
+
+infrastructure:
+  enabled: true
+  cloudSQL:
+    enabled: true
+    instanceConnectionName: "generated-mote-467410-b0:asia-southeast1:goshopx-postgres"
+    gcpServiceAccountEmail: "goshopx-runtime@generated-mote-467410-b0.iam.gserviceaccount.com"
+    serviceAccountName: goshopx-runtime
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+    resources: { requests: { cpu: 25m, memory: 64Mi }, limits: { cpu: 150m, memory: 128Mi } }
+  storageClass: standard-rwo
+  persistence: { enabled: true }
+  dashboards: { nodePort: false, kafkaUIEnabled: false }
+  nodePorts: { enabled: false }
+
+services:
+  admin: { enabled: true }
+  recommender-server: { enabled: true }
+  recommender-sync: { enabled: true, probesEnabled: false }
+  recommender-train: { enabled: false }
+
+config:
+  DUMMYJSON_SEED_ENABLED: "true"
+  DUMMYJSON_SEED_LIMIT: "0"
+  DUMMYJSON_PRICE_VND_RATE: "25000"
+  PRODUCT_API: http://product:8081/products
+  AI_ENDPOINT: https://api.deepseek.com/chat/completions
+  AI_MODEL: deepseek-flash
+  AI_TIMEOUT_SECONDS: "30"
+  AI_MAX_RETRIES: "1"
+  MILVUS_COLLECTION: product_catalog_gemini_v2
+  TEXT_EMBEDDING_DIMENSION: "768"
+  IMAGE_EMBEDDING_DIMENSION: "768"
+  GEMINI_EMBEDDING_MODEL: gemini-embedding-2
+  GEMINI_EMBEDDING_DIMENSION: "768"
+  ARTIFACTS_LOCAL_PATH: /tmp/artifacts
+
+observability:
+  metricsPort: 9090
+  serviceMonitor: { enabled: true, interval: 30s }
+  tracing: { otlpEndpoint: jaeger:4317 }

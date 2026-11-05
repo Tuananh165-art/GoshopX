@@ -46,9 +46,10 @@ class ChatService:
     English, with or without diacritics, and on free-form shopping topics.
     """
 
-    def __init__(self, *, retriever: HybridRetriever, llm: JSONLLM | None, guardrail: ProductChatGuardrail | None = None):
+    def __init__(self, *, retriever: HybridRetriever, llm: JSONLLM | None, image_query_embedding: Any | None = None, guardrail: ProductChatGuardrail | None = None):
         self._retriever = retriever
         self._llm = llm
+        self._image_query_embedding = image_query_embedding
         self._guardrail = guardrail or ProductChatGuardrail()
         self._graph = None
         try:
@@ -62,7 +63,7 @@ class ChatService:
             return self._graph.invoke({"request": request, "authenticated": authenticated})["response"]
         return self._reply_direct(request, authenticated=authenticated)
 
-    def _reply_direct(self, request: ChatRequest, *, authenticated: bool = False, skip_guardrail: bool = False) -> ChatResponse:
+    def _reply_direct(self, request: ChatRequest, *, authenticated: bool = False, skip_guardrail: bool = False, agent: str = "discovery") -> ChatResponse:
         warnings: list[str] = []
         if not skip_guardrail:
             decision = self._guardrail.inspect_user_input(request.text, authenticated=authenticated)
@@ -76,10 +77,17 @@ class ChatService:
             except Exception:
                 query_text = request.text
         plan = parse_query_plan(query_text, visual_query=bool(request.image_url))
+        image_vector = None
+        if request.image_url and self._image_query_embedding is not None:
+            try:
+                image_vector = self._image_query_embedding(request.image_url)
+            except Exception:
+                warnings.append("image_embedding_unavailable")
         products = self._retriever.search(
             plan,
             limit=request.limit,
             excluded_ids=set(request.viewed_product_ids),
+            image_vector=image_vector,
         )
         retrieved_ids = {str(product.get("id")) for product in products}
         answer = self._fallback_answer(products)
@@ -88,7 +96,7 @@ class ChatService:
         if self._llm is not None:
             try:
                 result = self._llm.complete_json(
-                    SYSTEM_PROMPT,
+                    f"{SYSTEM_PROMPT}\n\nAGENT_MODE: {agent}\n{_AGENT_INSTRUCTIONS[agent]}",
                     self._llm_prompt(request, plan.to_dict(), products),
                 )
                 selected_ids = {str(value) for value in result.get("product_ids", []) if value is not None}
@@ -143,3 +151,11 @@ def _safe_strings(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item)[:200] for item in value if isinstance(item, (str, int, float))]
+
+
+_AGENT_INSTRUCTIONS = {
+    "discovery": "Understand category, budget, brand and intended use from the request. Ask one concise clarification if a missing requirement prevents a useful shortlist.",
+    "recommendation": "Compare only retrieved products. Explain concrete trade-offs using catalog price, rating, warranty, shipping and return fields; say when a field is missing.",
+    "cart": "Prepare a shopping suggestion from retrieved in-stock products and relevant accessories. This agent cannot mutate a cart, apply a coupon, reserve inventory, create an order or initiate payment. Tell the user to review and use the explicit cart controls; backend prices and eligibility are authoritative.",
+    "multimodal": "Match only visible attributes from the uploaded product image to retrieved catalog products. Return catalog product images only; do not identify people or infer sensitive traits.",
+}
