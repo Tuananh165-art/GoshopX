@@ -59,10 +59,10 @@ LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 LANGSMITH_PROJECT=goshopx-recommender
 AI_SPEND_LIMIT_VND=200000
 AI_SPEND_RESERVE_PER_CALL_VND=500
-AI_DEEPSEEK_PROMPT_VND_PER_MILLION_TOKENS=
-AI_DEEPSEEK_COMPLETION_VND_PER_MILLION_TOKENS=
-AI_GEMINI_PROMPT_VND_PER_MILLION_TOKENS=
-AI_GEMINI_COMPLETION_VND_PER_MILLION_TOKENS=
+AI_DEEPSEEK_PROMPT_RATE_VND_PER_MILLION=
+AI_DEEPSEEK_COMPLETION_RATE_VND_PER_MILLION=
+AI_GEMINI_PROMPT_RATE_VND_PER_MILLION=
+AI_GEMINI_COMPLETION_RATE_VND_PER_MILLION=
 AI_TAVILY_CALL_VND=
 AI_TYPESAFE_CALL_VND=
 ```
@@ -75,7 +75,7 @@ Chat memory is persisted in PostgreSQL under a server-derived HMAC thread key. I
 
 ## Spend controls and tracing
 
-Before each outbound provider request, the PostgreSQL ledger reserves `AI_SPEND_RESERVE_PER_CALL_VND` under an advisory lock and refuses when current settled cost plus unresolved reservations would exceed `AI_SPEND_LIMIT_VND`. DeepSeek and Gemini responses settle against provider-reported token counts when both corresponding `*_VND_PER_MILLION_TOKENS` rates are configured. Tavily and TypeSafe use operator-configured per-call VND rates. Rates are intentionally blank by default; an unpriced response retains its reservation instead of being recorded as free. Timeouts and server errors also retain the reservation because the provider may have processed the request; confirmed client rejections release it. This is an application estimate, not provider invoice reconciliation, and a just-completed request can exceed its reservation before the next request is blocked. Keep rates aligned with current provider billing and check provider billing and the ledger before/after each live smoke. Do not run provider-backed k6 load tests.
+Before each outbound provider request, the PostgreSQL ledger reserves `AI_SPEND_RESERVE_PER_CALL_VND` under an advisory lock and refuses when current settled cost plus unresolved reservations would exceed `AI_SPEND_LIMIT_VND`. DeepSeek and Gemini responses settle against provider-reported token counts when both corresponding `*_RATE_VND_PER_MILLION` rates are configured. Tavily and TypeSafe use operator-configured per-call VND rates. Rates are intentionally blank by default; an unpriced response retains its reservation instead of being recorded as free. Timeouts and server errors also retain the reservation because the provider may have processed the request; confirmed client rejections release it. This is an application estimate, not provider invoice reconciliation, and a just-completed request can exceed its reservation before the next request is blocked. Keep rates aligned with current provider billing and check provider billing and the ledger before/after each live smoke. Do not run provider-backed k6 load tests.
 
 Inspect usage in the recommender PostgreSQL database (Cloud SQL Studio, database `recommender`):
 
@@ -96,7 +96,7 @@ The custom LangSmith callback sends route, bounded character count, product coun
 
 ## Admin knowledge preview and audit
 
-From **Admin → Dữ liệu AI**, choose an existing product link if needed and select PDF, DOCX, TXT, Markdown, JSON or CSV. The first request parses the file locally in the recommender service and returns up to three chunk samples, chunk/character counts and a token-based embedding estimate. This preview does not upload to GCS or call an AI provider. The VND estimate is shown only when `AI_GEMINI_PROMPT_VND_PER_MILLION_TOKENS` is set; it is approximate because provider tokenization can differ from the character/4 estimator. Click **Đưa vào hàng đợi xử lý** to upload the original to private GCS and enqueue a leased job. Only published sources are searchable by the customer assistant.
+From **Admin → Dữ liệu AI**, choose an existing product link if needed and select PDF, DOCX, TXT, Markdown, JSON or CSV. The first request parses the file locally in the recommender service and returns up to three chunk samples, chunk/character counts and a token-based embedding estimate. This preview does not upload to GCS or call an AI provider. The VND estimate is shown only when `AI_GEMINI_PROMPT_RATE_VND_PER_MILLION` is set; it is approximate because provider tokenization can differ from the character/4 estimator. Click **Đưa vào hàng đợi xử lý** to upload the original to private GCS and enqueue a leased job. Only published sources are searchable by the customer assistant.
 
 Enqueue, cancel, retry, publish and revoke actions create actor-attributed rows in `ai_ingestion_audit_events` in the same PostgreSQL transaction as the state change. The admin AI-data panel reads the latest 50 records. Job execution attempts are represented by job status/attempt count rather than separate audit records.
 

@@ -45,8 +45,8 @@ class ProviderSpendLedger:
         reservation charged instead of silently recording a zero-cost call.
         """
         provider = self._provider_for(entry_id)
-        input_rate = _rate(provider, "INPUT_VND_PER_MILLION_TOKENS")
-        output_rate = _rate(provider, "OUTPUT_VND_PER_MILLION_TOKENS")
+        input_rate = _rate(provider, "PROMPT_RATE_VND_PER_MILLION")
+        output_rate = _rate(provider, "COMPLETION_RATE_VND_PER_MILLION")
         actual = None if input_rate is None or output_rate is None else token_cost(input_tokens, output_tokens, input_rate, output_rate)
         self._update(entry_id, input_tokens=max(0, input_tokens), output_tokens=max(0, output_tokens), actual_vnd=actual,
                      status="settled" if actual is not None else "usage_unpriced")

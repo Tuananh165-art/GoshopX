@@ -17,8 +17,8 @@ class SpendCostTests(unittest.TestCase):
         self.assertEqual(token_cost(-10, -5, 100, 100), 0)
 
     def test_invalid_rate_is_unpriced(self):
-        with patch.dict(os.environ, {"AI_DEEPSEEK_INPUT_VND_PER_MILLION_TOKENS": "unknown"}, clear=False):
-            self.assertIsNone(_rate("deepseek", "INPUT_VND_PER_MILLION_TOKENS"))
+        with patch.dict(os.environ, {"AI_DEEPSEEK_PROMPT_RATE_VND_PER_MILLION": "unknown"}, clear=False):
+            self.assertIsNone(_rate("deepseek", "PROMPT_RATE_VND_PER_MILLION"))
 
 
 if __name__ == "__main__":

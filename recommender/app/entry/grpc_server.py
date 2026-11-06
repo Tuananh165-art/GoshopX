@@ -172,7 +172,7 @@ class RecommenderServiceServicer(recommender_pb2_grpc.RecommenderServiceServicer
             chunks = parse_document(request.name, request.content_type, request.content)
             characters = sum(len(text) for text, _ in chunks)
             tokens = math.ceil(characters / 4)
-            rate = os.getenv("AI_GEMINI_PROMPT_VND_PER_MILLION_TOKENS", "").strip()
+            rate = os.getenv("AI_GEMINI_PROMPT_RATE_VND_PER_MILLION", "").strip()
             cost_available = rate.isdigit()
             cost = math.ceil(tokens * int(rate) / 1_000_000) if cost_available else 0
             return recommender_pb2.KnowledgeDocumentPreview(
