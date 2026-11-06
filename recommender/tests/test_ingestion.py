@@ -41,7 +41,7 @@ class IngestionTests(unittest.TestCase):
         context = Context()
         request = recommender_pb2.PreviewKnowledgeDocumentRequest(
             name="policy.txt", content_type="text/plain", content=b"Warranty details")
-        with patch.dict(os.environ, {"AI_GEMINI_INPUT_VND_PER_MILLION_TOKENS": "1000000"}):
+        with patch.dict(os.environ, {"AI_GEMINI_PROMPT_VND_PER_MILLION_TOKENS": "1000000"}):
             result = RecommenderServiceServicer(None).PreviewKnowledgeDocument(request, context)
         self.assertIsNone(context.code)
         self.assertEqual((result.chunk_count, result.total_characters), (1, 16))

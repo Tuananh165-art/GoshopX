@@ -59,10 +59,10 @@ LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 LANGSMITH_PROJECT=goshopx-recommender
 AI_SPEND_LIMIT_VND=200000
 AI_SPEND_RESERVE_PER_CALL_VND=500
-AI_DEEPSEEK_INPUT_VND_PER_MILLION_TOKENS=
-AI_DEEPSEEK_OUTPUT_VND_PER_MILLION_TOKENS=
-AI_GEMINI_INPUT_VND_PER_MILLION_TOKENS=
-AI_GEMINI_OUTPUT_VND_PER_MILLION_TOKENS=
+AI_DEEPSEEK_PROMPT_VND_PER_MILLION_TOKENS=
+AI_DEEPSEEK_COMPLETION_VND_PER_MILLION_TOKENS=
+AI_GEMINI_PROMPT_VND_PER_MILLION_TOKENS=
+AI_GEMINI_COMPLETION_VND_PER_MILLION_TOKENS=
 AI_TAVILY_CALL_VND=
 AI_TYPESAFE_CALL_VND=
 ```
@@ -96,7 +96,7 @@ The custom LangSmith callback sends route, bounded character count, product coun
 
 ## Admin knowledge preview and audit
 
-From **Admin → Dữ liệu AI**, choose an existing product link if needed and select PDF, DOCX, TXT, Markdown, JSON or CSV. The first request parses the file locally in the recommender service and returns up to three chunk samples, chunk/character counts and a token-based embedding estimate. This preview does not upload to GCS or call an AI provider. The VND estimate is shown only when `AI_GEMINI_INPUT_VND_PER_MILLION_TOKENS` is set; it is approximate because provider tokenization can differ from the character/4 estimator. Click **Đưa vào hàng đợi xử lý** to upload the original to private GCS and enqueue a leased job. Only published sources are searchable by the customer assistant.
+From **Admin → Dữ liệu AI**, choose an existing product link if needed and select PDF, DOCX, TXT, Markdown, JSON or CSV. The first request parses the file locally in the recommender service and returns up to three chunk samples, chunk/character counts and a token-based embedding estimate. This preview does not upload to GCS or call an AI provider. The VND estimate is shown only when `AI_GEMINI_PROMPT_VND_PER_MILLION_TOKENS` is set; it is approximate because provider tokenization can differ from the character/4 estimator. Click **Đưa vào hàng đợi xử lý** to upload the original to private GCS and enqueue a leased job. Only published sources are searchable by the customer assistant.
 
 Enqueue, cancel, retry, publish and revoke actions create actor-attributed rows in `ai_ingestion_audit_events` in the same PostgreSQL transaction as the state change. The admin AI-data panel reads the latest 50 records. Job execution attempts are represented by job status/attempt count rather than separate audit records.
 
