@@ -10,13 +10,11 @@ spec:
   addresses:
     - type: NamedAddress
       value: {{ .Values.global.gateway.staticIpName | quote }}
+  # GKE drops listener hostnames; the HTTPRoute below keeps the public host allowlist.
   listeners:
     - name: https
       protocol: HTTPS
       port: 443
-      hostnames:
-        - {{ required "global.gateway.hostname required" .Values.global.gateway.hostname | quote }}
-        - {{ required "global.gateway.wwwHostname required" .Values.global.gateway.wwwHostname | quote }}
       allowedRoutes:
         namespaces: { from: Same }
 ---
