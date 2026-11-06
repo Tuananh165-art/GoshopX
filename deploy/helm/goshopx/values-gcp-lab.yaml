@@ -38,30 +38,30 @@ infrastructure:
   dashboards: {nodePort: false, kafkaUIEnabled: false}
   nodePorts: {enabled: false}
 services:
-  admin: {enabled: true, imageDigest: 'sha256:dd453eaa871a3349b48ce5359ef119312af7ed7f8e93a502465d2cbcc042dae7'}
-  recommender-server: {enabled: true, imageDigest: 'sha256:22788a30b2ad7c0c931baf9108d0cdc422358da3066568c440e5e4e003b718f9'}
-  recommender-sync: {enabled: true, probesEnabled: false, imageDigest: 'sha256:12408d0b727c06eb3c5bfa931640fb5f4796580fbd3cf01508ba6954e55a1f40'}
-  recommender-ingestion: {enabled: true, imageDigest: 'sha256:2a7a75df9306dc75e4eac5eaacd48173360aec7bcf98feb3d33c214989a02400'}
-  recommender-train: {enabled: false, imageDigest: 'sha256:004b0b0f82569375f98ff9e0303bf3d38d49b7bf2dcb34bcc5737bcd88bb845f'}
+  admin: {enabled: true, imageDigest: 'sha256:2affab0627cac942f579b212169ce058a30ab802eae8873b40b009110f849098'}
+  recommender-server: {enabled: true, imageDigest: 'sha256:502860b4ed491e137f4b9e18c7204e48c39a77ac6242e2639016fd8db82dcea7'}
+  recommender-sync: {enabled: true, probesEnabled: false, imageDigest: 'sha256:ab83436ed666d8382eb35a2e7da76e8875488541f4b99c192c59a1c8e979abb2'}
+  recommender-ingestion: {enabled: true, imageDigest: 'sha256:7d1b863e836d1fa31aeb9923cd128cd4ba0b34c8865ebdefc14adf706d218397'}
+  recommender-train: {enabled: false, imageDigest: 'sha256:6265edf1f8bc762d76d1ba2550fcd053523273aa6b797c8f2edffe0340d60477'}
   account:
-    imageDigest: sha256:84b22002e4befa3b16de05f11fb4d635897302c96ecd065e15cdb1de463e5100
+    imageDigest: sha256:51a66d8beea1ef90b50a7fb04823deccf7c49394c18db82fee1c4620bdf8b695
   cart:
-    imageDigest: sha256:bd5c243f9116a643797579d3697aa8436af60c9256507b6e8b493afad7fad566
+    imageDigest: sha256:182c63cf9ad38ffd9d8bcb805d9bd0434107524c8e3aa99d0d9533e20da2c2cf
   graphql:
     secretKeys: {SECRET_KEY: SECRET_KEY}
-    imageDigest: sha256:0f3588c7fdfcc465f79285c07c554d5511b8d276953f6047159fa9c98e077a9f
+    imageDigest: sha256:7a07355ef189b82269655663d8fc20b39569b5e58a550e6633cc8dc0e4a96f16
   inventory:
-    imageDigest: sha256:e460529b47308fa32b70d7b0fa1783278d5e9b5cbad950faf1df3eb7fdf6711f
+    imageDigest: sha256:6fa3e6811dff5ed1d3169394d64e4eb141fcbee67cfaf28ab204cf6f54f82d36
   notification:
-    imageDigest: sha256:f650a02597555b7aa191024061c0b92a5ff8a910344ab6bb242f78162d547b1b
+    imageDigest: sha256:67058da925cf9705a23c1f3dbfff42896d5fd9eeed934e83ff728d646fbb2948
   order:
-    imageDigest: sha256:b980a6aa10906fe45773104f79e72c1759058603aa5d5bc2ceb1e8e26fe87225
+    imageDigest: sha256:2c85fb945054d1ead3854dfa97dd6d57e2ef7fa339e30b862b46edd491d0b6a2
   payment:
-    imageDigest: sha256:157a92d74f1d024b4ab4924f9bc855c5a1cf6609c5c7306d1b042cd30729ca0a
+    imageDigest: sha256:8976e28df6d1fd636d75c464e08fe9f07100f640f68b721bd6d816454768f678
   product:
-    imageDigest: sha256:d58c9ececa33dd4bbc352c97707734cfd8db6b4421670c32c0d99810d171f3fa
+    imageDigest: sha256:b7c32b6d6f9395a65c9965c06ac9aa908ab6b92c8326fce0923a54d7709de8d0
   web:
-    imageDigest: sha256:4c5c9527d9b55a6e9c2f030912ee344a2f5d65f1bf2d1c19ab8eb7c19749c23c
+    imageDigest: sha256:e2e6e2cb50b943ff3361f53425df24ac3ee08f1d3fe828a8f2e1079969822f3c
 config:
   GCS_MEDIA_BUCKET: "generated-mote-467410-b0-media"
   DUMMYJSON_SEED_ENABLED: "false"
