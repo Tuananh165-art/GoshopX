@@ -29,6 +29,7 @@ WORKDIR /app
 # implicit loads OpenMP-backed native extensions at import time. The builder
 # has the compiler toolchain, but the slim runtime must provide libgomp too.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 

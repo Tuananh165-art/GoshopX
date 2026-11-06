@@ -45,9 +45,10 @@ TYPESAFE_API_KEY = os.getenv("TYPESAFE_API_KEY", "")
 TYPESAFE_BASE_URL = os.getenv("TYPESAFE_BASE_URL", "https://api.typesafe.ai")
 TYPESAFE_JEV_MODEL = os.getenv("TYPESAFE_JEV_MODEL", "jev-1.14.0")
 TYPESAFE_JEV_ENDPOINT = os.getenv("TYPESAFE_JEV_ENDPOINT", "https://api.typesafe.ai/v1/systemone")
-JEV_MODE = os.getenv("JEV_MODE", "shadow").strip().lower()
-if os.getenv("NODE_ENV", "").strip().lower() == "production":
-    JEV_MODE = "off"
+_DEFAULT_JEV_MODE = "off" if os.getenv("NODE_ENV", "").strip().lower() == "production" else "shadow"
+JEV_MODE = os.getenv("JEV_MODE", _DEFAULT_JEV_MODE).strip().lower()
+if JEV_MODE not in {"off", "shadow", "active"}:
+    raise ValueError("JEV_MODE must be off, shadow, or active")
 JEV_RERANK_ENABLED = os.getenv("JEV_RERANK_ENABLED", "false").strip().lower() == "true"
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY", "")
 LANGSMITH_ENDPOINT = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")

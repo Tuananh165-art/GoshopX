@@ -187,8 +187,7 @@ def load_chat_service() -> ChatService:
 
 def _build_memory():
     if not DATABASE_URL or not CHAT_SESSION_SIGNING_KEY:
-        logger.warning("Persistent chat memory disabled: database URL or signing key is missing")
-        return None
+        raise RuntimeError("Persistent chat memory is enabled but database URL or signing key is missing")
     try:
         from chat.memory import PostgresChatMemory
         from langgraph.checkpoint.postgres import PostgresSaver
@@ -202,9 +201,9 @@ def _build_memory():
         checkpointer.setup()
         logger.info("Persistent chat memory enabled")
         return PostgresChatMemory(checkpointer=checkpointer)
-    except Exception:
-        logger.exception("Persistent chat memory unavailable; using stateless chat")
-        return None
+    except Exception as exc:
+        logger.exception("Persistent chat memory initialization failed")
+        raise RuntimeError("Persistent chat memory initialization failed") from exc
 
 
 def _build_knowledge_search(spend_ledger):
