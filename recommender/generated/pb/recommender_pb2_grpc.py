@@ -3,9 +3,9 @@
 import grpc
 import warnings
 
-from . import recommender_pb2 as recommender__pb2
+from generated.pb import recommender_pb2 as recommender__pb2
 
-GRPC_GENERATED_VERSION = '1.67.1'
+GRPC_GENERATED_VERSION = '1.82.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in recommender_pb2_grpc.py depends on'
+        + ' but the generated code in recommender_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class RecommenderServiceStub(object):
+class RecommenderServiceStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -49,9 +49,54 @@ class RecommenderServiceStub(object):
                 request_serializer=recommender__pb2.ChatRecommendationRequest.SerializeToString,
                 response_deserializer=recommender__pb2.ChatRecommendationResponse.FromString,
                 _registered_method=True)
+        self.DeleteChatHistory = channel.unary_unary(
+                '/pb.RecommenderService/DeleteChatHistory',
+                request_serializer=recommender__pb2.DeleteChatHistoryRequest.SerializeToString,
+                response_deserializer=recommender__pb2.DeleteChatHistoryResponse.FromString,
+                _registered_method=True)
+        self.EnqueueKnowledgeIngestion = channel.unary_unary(
+                '/pb.RecommenderService/EnqueueKnowledgeIngestion',
+                request_serializer=recommender__pb2.EnqueueKnowledgeIngestionRequest.SerializeToString,
+                response_deserializer=recommender__pb2.KnowledgeIngestionJob.FromString,
+                _registered_method=True)
+        self.GetKnowledgeIngestionJob = channel.unary_unary(
+                '/pb.RecommenderService/GetKnowledgeIngestionJob',
+                request_serializer=recommender__pb2.KnowledgeIngestionJobRequest.SerializeToString,
+                response_deserializer=recommender__pb2.KnowledgeIngestionJob.FromString,
+                _registered_method=True)
+        self.ListKnowledgeIngestionJobs = channel.unary_unary(
+                '/pb.RecommenderService/ListKnowledgeIngestionJobs',
+                request_serializer=recommender__pb2.ListKnowledgeIngestionJobsRequest.SerializeToString,
+                response_deserializer=recommender__pb2.KnowledgeIngestionJobList.FromString,
+                _registered_method=True)
+        self.CancelKnowledgeIngestionJob = channel.unary_unary(
+                '/pb.RecommenderService/CancelKnowledgeIngestionJob',
+                request_serializer=recommender__pb2.CancelKnowledgeIngestionJobRequest.SerializeToString,
+                response_deserializer=recommender__pb2.CancelKnowledgeIngestionJobResponse.FromString,
+                _registered_method=True)
+        self.RetryKnowledgeIngestionJob = channel.unary_unary(
+                '/pb.RecommenderService/RetryKnowledgeIngestionJob',
+                request_serializer=recommender__pb2.RetryKnowledgeIngestionJobRequest.SerializeToString,
+                response_deserializer=recommender__pb2.RetryKnowledgeIngestionJobResponse.FromString,
+                _registered_method=True)
+        self.SetKnowledgeSourceStatus = channel.unary_unary(
+                '/pb.RecommenderService/SetKnowledgeSourceStatus',
+                request_serializer=recommender__pb2.SetKnowledgeSourceStatusRequest.SerializeToString,
+                response_deserializer=recommender__pb2.SetKnowledgeSourceStatusResponse.FromString,
+                _registered_method=True)
+        self.PreviewKnowledgeDocument = channel.unary_unary(
+                '/pb.RecommenderService/PreviewKnowledgeDocument',
+                request_serializer=recommender__pb2.PreviewKnowledgeDocumentRequest.SerializeToString,
+                response_deserializer=recommender__pb2.KnowledgeDocumentPreview.FromString,
+                _registered_method=True)
+        self.ListIngestionAuditEvents = channel.unary_unary(
+                '/pb.RecommenderService/ListIngestionAuditEvents',
+                request_serializer=recommender__pb2.ListIngestionAuditEventsRequest.SerializeToString,
+                response_deserializer=recommender__pb2.IngestionAuditEventList.FromString,
+                _registered_method=True)
 
 
-class RecommenderServiceServicer(object):
+class RecommenderServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def GetRecommendations(self, request, context):
@@ -67,6 +112,60 @@ class RecommenderServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ChatRecommend(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteChatHistory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EnqueueKnowledgeIngestion(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetKnowledgeIngestionJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListKnowledgeIngestionJobs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CancelKnowledgeIngestionJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RetryKnowledgeIngestionJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetKnowledgeSourceStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PreviewKnowledgeDocument(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListIngestionAuditEvents(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -90,6 +189,51 @@ def add_RecommenderServiceServicer_to_server(servicer, server):
                     request_deserializer=recommender__pb2.ChatRecommendationRequest.FromString,
                     response_serializer=recommender__pb2.ChatRecommendationResponse.SerializeToString,
             ),
+            'DeleteChatHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteChatHistory,
+                    request_deserializer=recommender__pb2.DeleteChatHistoryRequest.FromString,
+                    response_serializer=recommender__pb2.DeleteChatHistoryResponse.SerializeToString,
+            ),
+            'EnqueueKnowledgeIngestion': grpc.unary_unary_rpc_method_handler(
+                    servicer.EnqueueKnowledgeIngestion,
+                    request_deserializer=recommender__pb2.EnqueueKnowledgeIngestionRequest.FromString,
+                    response_serializer=recommender__pb2.KnowledgeIngestionJob.SerializeToString,
+            ),
+            'GetKnowledgeIngestionJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetKnowledgeIngestionJob,
+                    request_deserializer=recommender__pb2.KnowledgeIngestionJobRequest.FromString,
+                    response_serializer=recommender__pb2.KnowledgeIngestionJob.SerializeToString,
+            ),
+            'ListKnowledgeIngestionJobs': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListKnowledgeIngestionJobs,
+                    request_deserializer=recommender__pb2.ListKnowledgeIngestionJobsRequest.FromString,
+                    response_serializer=recommender__pb2.KnowledgeIngestionJobList.SerializeToString,
+            ),
+            'CancelKnowledgeIngestionJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.CancelKnowledgeIngestionJob,
+                    request_deserializer=recommender__pb2.CancelKnowledgeIngestionJobRequest.FromString,
+                    response_serializer=recommender__pb2.CancelKnowledgeIngestionJobResponse.SerializeToString,
+            ),
+            'RetryKnowledgeIngestionJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.RetryKnowledgeIngestionJob,
+                    request_deserializer=recommender__pb2.RetryKnowledgeIngestionJobRequest.FromString,
+                    response_serializer=recommender__pb2.RetryKnowledgeIngestionJobResponse.SerializeToString,
+            ),
+            'SetKnowledgeSourceStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetKnowledgeSourceStatus,
+                    request_deserializer=recommender__pb2.SetKnowledgeSourceStatusRequest.FromString,
+                    response_serializer=recommender__pb2.SetKnowledgeSourceStatusResponse.SerializeToString,
+            ),
+            'PreviewKnowledgeDocument': grpc.unary_unary_rpc_method_handler(
+                    servicer.PreviewKnowledgeDocument,
+                    request_deserializer=recommender__pb2.PreviewKnowledgeDocumentRequest.FromString,
+                    response_serializer=recommender__pb2.KnowledgeDocumentPreview.SerializeToString,
+            ),
+            'ListIngestionAuditEvents': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListIngestionAuditEvents,
+                    request_deserializer=recommender__pb2.ListIngestionAuditEventsRequest.FromString,
+                    response_serializer=recommender__pb2.IngestionAuditEventList.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'pb.RecommenderService', rpc_method_handlers)
@@ -98,7 +242,7 @@ def add_RecommenderServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class RecommenderService(object):
+class RecommenderService:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -172,6 +316,249 @@ class RecommenderService(object):
             '/pb.RecommenderService/ChatRecommend',
             recommender__pb2.ChatRecommendationRequest.SerializeToString,
             recommender__pb2.ChatRecommendationResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteChatHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/DeleteChatHistory',
+            recommender__pb2.DeleteChatHistoryRequest.SerializeToString,
+            recommender__pb2.DeleteChatHistoryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EnqueueKnowledgeIngestion(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/EnqueueKnowledgeIngestion',
+            recommender__pb2.EnqueueKnowledgeIngestionRequest.SerializeToString,
+            recommender__pb2.KnowledgeIngestionJob.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetKnowledgeIngestionJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/GetKnowledgeIngestionJob',
+            recommender__pb2.KnowledgeIngestionJobRequest.SerializeToString,
+            recommender__pb2.KnowledgeIngestionJob.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListKnowledgeIngestionJobs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/ListKnowledgeIngestionJobs',
+            recommender__pb2.ListKnowledgeIngestionJobsRequest.SerializeToString,
+            recommender__pb2.KnowledgeIngestionJobList.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CancelKnowledgeIngestionJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/CancelKnowledgeIngestionJob',
+            recommender__pb2.CancelKnowledgeIngestionJobRequest.SerializeToString,
+            recommender__pb2.CancelKnowledgeIngestionJobResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RetryKnowledgeIngestionJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/RetryKnowledgeIngestionJob',
+            recommender__pb2.RetryKnowledgeIngestionJobRequest.SerializeToString,
+            recommender__pb2.RetryKnowledgeIngestionJobResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetKnowledgeSourceStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/SetKnowledgeSourceStatus',
+            recommender__pb2.SetKnowledgeSourceStatusRequest.SerializeToString,
+            recommender__pb2.SetKnowledgeSourceStatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PreviewKnowledgeDocument(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/PreviewKnowledgeDocument',
+            recommender__pb2.PreviewKnowledgeDocumentRequest.SerializeToString,
+            recommender__pb2.KnowledgeDocumentPreview.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListIngestionAuditEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.RecommenderService/ListIngestionAuditEvents',
+            recommender__pb2.ListIngestionAuditEventsRequest.SerializeToString,
+            recommender__pb2.IngestionAuditEventList.FromString,
             options,
             channel_credentials,
             insecure,

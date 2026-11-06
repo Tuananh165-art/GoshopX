@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -20,6 +21,26 @@ type MockRepository struct {
 func (m *MockRepository) PutOrder(ctx context.Context, order *models.Order) error {
 	args := m.Called(ctx, order)
 	return args.Error(0)
+}
+
+func (m *MockRepository) PutOrderWithCoupon(ctx context.Context, order *models.Order, couponCode string) error {
+	args := m.Called(ctx, order, couponCode)
+	return args.Error(0)
+}
+
+func (m *MockRepository) CreateCheckoutQuote(ctx context.Context, quote *models.CheckoutQuoteRecord) error {
+	args := m.Called(ctx, quote)
+	return args.Error(0)
+}
+
+func (m *MockRepository) PutOrderWithQuote(ctx context.Context, order *models.Order, quoteID, itemsHash string, cartVersion uint64) (bool, error) {
+	args := m.Called(ctx, order, quoteID, itemsHash, cartVersion)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockRepository) PreviewCoupon(ctx context.Context, accountID uint64, subtotalVND int64, couponCode string) (int64, error) {
+	args := m.Called(ctx, accountID, subtotalVND, couponCode)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockRepository) GetOrdersForAccount(ctx context.Context, accountId uint64) ([]*models.Order, error) {
@@ -143,6 +164,35 @@ func TestOrderService_PostOrder(t *testing.T) {
 		assert.Equal(t, "database error", err.Error())
 		mockRepo.AssertExpectations(t)
 	})
+}
+
+func TestOrderService_PreviewCheckoutReturnsExpiringIntegerVNDQuote(t *testing.T) {
+	repository := new(MockRepository)
+	repository.On("PreviewCoupon", mock.Anything, uint64(42), int64(2_000_000), "LAB10").Return(int64(100_000), nil).Once()
+	repository.On("CreateCheckoutQuote", mock.Anything, mock.MatchedBy(func(quote *models.CheckoutQuoteRecord) bool {
+		return quote.AccountID == 42 && quote.ItemsHash == models.CheckoutItemsHash([]*models.OrderedProduct{{ID: "p1", Quantity: 1}})
+	})).Return(nil).Once()
+	service := internal.NewOrderService(repository, nil)
+	before := time.Now().UTC()
+	quote, err := service.PreviewCheckout(context.Background(), 42, 2_000_000, []*models.OrderedProduct{{ID: "p1", Quantity: 1}}, " lab10 ", 17)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2_000_000), quote.SubtotalVND)
+	assert.Equal(t, int64(100_000), quote.DiscountVND)
+	assert.Equal(t, int64(1_900_000), quote.TotalPriceVND)
+	assert.Equal(t, "LAB10", quote.CouponCode)
+	assert.Len(t, quote.ID, 48)
+	assert.Equal(t, uint64(17), quote.CartVersion)
+	assert.WithinDuration(t, before.Add(10*time.Minute), quote.ExpiresAt, time.Second)
+	repository.AssertExpectations(t)
+}
+
+func TestOrderServiceRejectsNonFiniteOrNegativeVNDTotal(t *testing.T) {
+	service := internal.NewOrderService(new(MockRepository), nil)
+	for _, total := range []float64{-1, math.NaN(), math.Inf(1), math.Inf(-1), float64(math.MaxInt64)} {
+		if _, err := service.PostOrder(context.Background(), 1, total, nil, false); !errors.Is(err, internal.ErrInvalidOrderTotal) {
+			t.Fatalf("PostOrder(%v) error = %v, want ErrInvalidOrderTotal", total, err)
+		}
+	}
 }
 
 func TestOrderService_GetOrdersForAccount(t *testing.T) {

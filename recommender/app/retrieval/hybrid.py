@@ -38,7 +38,7 @@ class HybridRetriever:
 
         result: list[dict[str, Any]] = []
         for rank, product_id in enumerate(fused_ids):
-            if product_id in excluded_ids or not self._eligible(product_id):
+            if product_id in excluded_ids or not self._eligible(product_id, plan):
                 continue
             product = dict(self._catalog[product_id])
             product["retrievalScore"] = round((1 / (60 + rank + 1)) + raw_scores.get(product_id, 0.0) * 0.1, 6)
@@ -48,11 +48,30 @@ class HybridRetriever:
                 break
         return result
 
-    def _eligible(self, product_id: str) -> bool:
+    def products_by_ids(self, product_ids: list[str], plan: Any, *, limit: int = 10) -> list[dict[str, Any]]:
+        return [dict(self._catalog[product_id]) for product_id in dict.fromkeys(product_ids)
+                if self._eligible(product_id, plan)][:max(1, min(limit, 10))]
+
+    def _eligible(self, product_id: str, plan: Any) -> bool:
         product = self._catalog.get(product_id)
         if not product:
             return False
-        return product.get("publishStatus", "") == "published" and product.get("moderationStatus", "") == "approved" and int(product.get("stock", 0) or 0) > 0
+        if product.get("publishStatus", "") != "published" or product.get("moderationStatus", "") != "approved":
+            return False
+        if int(product.get("stock", 0) or 0) <= 0:
+            return False
+        category = str(getattr(plan, "category", None) or "").casefold()
+        brand = str(getattr(plan, "brand", None) or "").casefold()
+        if category and str(product.get("category", "")).casefold() != category:
+            return False
+        if brand and brand not in str(product.get("brand", "")).casefold():
+            return False
+        try:
+            price = float(product.get("price", 0) or 0)
+        except (TypeError, ValueError):
+            return False
+        minimum, maximum = getattr(plan, "min_price", None), getattr(plan, "max_price", None)
+        return not (minimum is not None and price < minimum or maximum is not None and price > maximum)
 
 
 def reciprocal_rank_fusion(rankings: list[list[str]], *, k: int = 60) -> list[str]:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -57,6 +58,7 @@ func (p DummyJSONProduct) Model() *models.Product {
 		AvailabilityStatus: p.AvailabilityStatus, Reviews: p.Reviews, ReturnPolicy: p.ReturnPolicy,
 		MinimumOrderQuantity: p.MinimumOrderQuantity, Meta: p.Meta, Thumbnail: p.Thumbnail, Images: p.Images,
 		CategoryID: p.Category, PublishStatus: "published", ModerationStatus: "approved", Media: media,
+		SourceSystem: "dummyjson", SourceID: strconv.Itoa(p.ID),
 	}
 }
 
@@ -131,6 +133,9 @@ func (c *DummyJSONClient) Get(ctx context.Context, id string) (*DummyJSONProduct
 func (c *DummyJSONClient) Seed(ctx context.Context, repository Repository, limit uint64) (int, error) {
 	const pageSize = 100
 	imported, skip := uint64(0), uint64(0)
+	seen := make(map[int]struct{})
+	snapshotTotal := -1
+	snapshotID := uuid.NewString()
 	categories := make(map[string]*models.Category)
 	for {
 		pageLimit := uint64(pageSize)
@@ -144,8 +149,24 @@ func (c *DummyJSONClient) Seed(ctx context.Context, repository Repository, limit
 		if err != nil {
 			return int(imported), err
 		}
+		if page.Skip != int(skip) || page.Total < 0 || len(page.Products) > int(pageLimit) {
+			return int(imported), fmt.Errorf("dummyjson returned an inconsistent page at offset %d", skip)
+		}
+		if snapshotTotal < 0 {
+			snapshotTotal = page.Total
+		} else if page.Total != snapshotTotal {
+			return int(imported), fmt.Errorf("dummyjson product total changed during import: %d to %d", snapshotTotal, page.Total)
+		}
 		for _, item := range page.Products {
+			if item.ID <= 0 {
+				return int(imported), fmt.Errorf("dummyjson product has invalid id %d", item.ID)
+			}
+			if _, duplicate := seen[item.ID]; duplicate {
+				return int(imported), fmt.Errorf("dummyjson returned duplicate product id %d", item.ID)
+			}
+			seen[item.ID] = struct{}{}
 			product := item.Model()
+			product.ImportSnapshotID = snapshotID
 			product.Price *= c.priceVNDExchange
 			if err := repository.PutProductWithID(ctx, product); err != nil {
 				return int(imported), err
@@ -155,7 +176,14 @@ func (c *DummyJSONClient) Seed(ctx context.Context, repository Repository, limit
 			}
 			imported++
 		}
-		if len(page.Products) == 0 || imported >= uint64(page.Total) || (limit > 0 && imported >= limit) {
+		expected := uint64(snapshotTotal)
+		if limit > 0 && limit < expected {
+			expected = limit
+		}
+		if len(page.Products) == 0 || imported >= expected {
+			if imported != expected {
+				return int(imported), fmt.Errorf("dummyjson snapshot incomplete: imported %d of %d products", imported, expected)
+			}
 			for _, category := range categories {
 				if err := repository.PutCategory(ctx, category); err != nil {
 					return int(imported), err

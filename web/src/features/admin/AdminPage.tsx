@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { graphql, graphqlUpload } from '../../shared/api/graphql'
 import { vnd } from '../../shared/lib/format'
 
-const items = [['', 'Tổng quan'], ['catalog', 'Danh mục'], ['orders', 'Đơn hàng'], ['transactions', 'Giao dịch'], ['inventory', 'Kho hàng'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký']]
-const names: Record<string, string> = { catalog: 'Danh mục & kiểm duyệt', orders: 'Đơn hàng', transactions: 'Giao dịch & đối soát', inventory: 'Kho & phiên giữ hàng', accounts: 'Tài khoản', audit: 'Nhật ký bất biến' }
+const items = [['', 'Tổng quan'], ['catalog', 'Danh mục'], ['ai-data', 'Dữ liệu AI'], ['orders', 'Đơn hàng'], ['transactions', 'Giao dịch'], ['inventory', 'Kho hàng'], ['accounts', 'Tài khoản'], ['audit', 'Nhật ký']]
+const names: Record<string, string> = { catalog: 'Danh mục & kiểm duyệt', 'ai-data': 'Dữ liệu AI', orders: 'Đơn hàng', transactions: 'Giao dịch & đối soát', inventory: 'Kho & phiên giữ hàng', accounts: 'Tài khoản', audit: 'Nhật ký bất biến' }
 
 type Account = { id: number; name: string; email: string; role: string; status: string }
 type Category = { id: string; name: string; slug: string; description: string; isActive: boolean }
@@ -15,6 +15,9 @@ type Stock = { productId: string; totalQuantity: number; reservedQuantity: numbe
 type Reservation = { reservationId: string; accountId: number; productId: string; quantity: number; status: string; source: string; expiresAt: string }
 type AuditEvent = { eventId: string; actorAccountId: number; targetAccountId: number; action: string; outcome: string; requestId: string; occurredAt: string }
 type Dashboard = { gmv: number; revenue: number; orderCount: number; averageOrderValue: number; paymentAttempts: number; successfulPayments: number; paymentSuccessRate: number }
+type KnowledgeJob = { id: string; sourceId: string; name: string; status: string; sourceStatus: string; attempts: number; errorCode: string; createdAt: string; chunkCount: number }
+type IngestionAuditEvent = { id: string; actorAccountId: number; action: string; sourceId: string; jobId: string; outcome: string; occurredAt: string }
+type KnowledgePreview = { chunkCount: number; totalCharacters: number; estimatedEmbeddingTokens: number; estimatedEmbeddingCostVnd: number; costEstimateAvailable: boolean; samples: { index: number; text: string; characters: number }[] }
 
 const accountFields = 'id name email role status'
 const orderFields = 'id accountId totalPrice status paymentStatus createdAt'
@@ -107,9 +110,81 @@ function AuditPanel() {
   return <><Toolbar onRefresh={load} loading={state === 'loading'}/>{state === 'loading' ? <p className="admin-loading">Đang tải nhật ký…</p> : rows.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Thời gian</th><th>Người thao tác</th><th>Hành động</th><th>Kết quả</th><th>Request ID</th></tr></thead><tbody>{rows.map(row => <tr key={row.eventId}><td>{formatDate(row.occurredAt)}</td><td>#{row.actorAccountId}</td><td>{statusLabel(row.action)}</td><td>{statusLabel(row.outcome)}</td><td><small>{row.requestId}</small></td></tr>)}</tbody></table></div> : <div className="empty-table"><b>Chưa có sự kiện audit</b></div>}</>
 }
 
+function AIDataPanel() {
+  const [jobs, setJobs] = useState<KnowledgeJob[]>([])
+  const [auditEvents, setAuditEvents] = useState<IngestionAuditEvent[]>([])
+  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<KnowledgePreview | null>(null)
+  const [error, setError] = useState('')
+  const [productId, setProductId] = useState('')
+  const load = useCallback(async () => {
+    setLoading(true); setError('')
+    try {
+      const [jobResult, auditResult] = await Promise.all([
+        graphql<{ adminKnowledgeIngestionJobs: KnowledgeJob[] }>(`query AdminKnowledgeJobs { adminKnowledgeIngestionJobs(limit: 50) { id sourceId name status sourceStatus attempts errorCode createdAt chunkCount } }`),
+        graphql<{ adminKnowledgeIngestionAuditEvents: IngestionAuditEvent[] }>(`query AdminKnowledgeAudit { adminKnowledgeIngestionAuditEvents(limit: 50) { id actorAccountId action sourceId jobId outcome occurredAt } }`),
+      ])
+      setJobs(jobResult.adminKnowledgeIngestionJobs); setAuditEvents(auditResult.adminKnowledgeIngestionAuditEvents)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không tải được danh sách ingestion.') }
+    finally { setLoading(false) }
+  }, [])
+  useEffect(() => { void load() }, [load])
+  const active = jobs.some(job => ['queued', 'running'].includes(job.status.toLowerCase()))
+  useEffect(() => {
+    if (!active) return
+    const timer = window.setInterval(() => { void load() }, 4000)
+    return () => window.clearInterval(timer)
+  }, [active, load])
+  async function previewFile(file?: File) {
+    if (!file) return
+    if (file.size < 1 || file.size > 20 * 1024 * 1024) { setError('Tài liệu phải có dung lượng từ 1 byte đến 20 MiB.'); return }
+    setUploading(true); setError(''); setPendingFile(null); setPreview(null)
+    try {
+      const result = await graphqlUpload<{ adminPreviewKnowledgeDocument: KnowledgePreview }>(`mutation PreviewKnowledge($file: Upload!) { adminPreviewKnowledgeDocument(file: $file) { chunkCount totalCharacters estimatedEmbeddingTokens estimatedEmbeddingCostVnd costEstimateAvailable samples { index text characters } } }`, { file: null }, file)
+      setPendingFile(file); setPreview(result.adminPreviewKnowledgeDocument)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể xem trước tài liệu.') }
+    finally { setUploading(false) }
+  }
+  async function upload() {
+    if (!pendingFile || !preview) return
+    setUploading(true); setError('')
+    try {
+      await graphqlUpload(`mutation UploadKnowledge($file: Upload!, $key: String!, $productId: String) { adminUploadKnowledgeDocument(file: $file, idempotencyKey: $key, productId: $productId) { id status name } }`, { file: null, key: crypto.randomUUID(), productId: productId.trim() || null }, pendingFile)
+      setPendingFile(null); setPreview(null)
+      await load()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Nạp tài liệu thất bại.') }
+    finally { setUploading(false) }
+  }
+  async function cancel(job: KnowledgeJob) {
+    try {
+      await graphql(`mutation CancelKnowledgeJob($id: ID!) { adminCancelKnowledgeIngestionJob(id: $id) }`, { id: job.id })
+      await load()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Hủy công việc thất bại.') }
+  }
+  async function retry(job: KnowledgeJob) {
+    try { await graphql(`mutation RetryKnowledgeJob($id: ID!) { adminRetryKnowledgeIngestionJob(id: $id) }`, { id: job.id }); await load() }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Thử lại ingestion thất bại.') }
+  }
+  async function setSourceStatus(job: KnowledgeJob) {
+    const status = job.sourceStatus === 'published' ? 'revoked' : 'published'
+    try { await graphql(`mutation SetKnowledgeSourceStatus($sourceId: ID!, $status: String!) { adminSetKnowledgeSourceStatus(sourceId: $sourceId, status: $status) }`, { sourceId: job.sourceId, status }); await load() }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Cập nhật trạng thái tài liệu thất bại.') }
+  }
+  return <>
+    <div className="panel-head"><div><b>Nạp tri thức cho chatbot</b><p>Tải tài liệu vào GCS riêng tư, sau đó worker phân tích và chia thành các đoạn tri thức.</p></div><button onClick={() => void load()} disabled={loading}>{loading ? 'Đang làm mới…' : 'Làm mới'}</button></div>
+    <div className="admin-product-form"><label>Mã sản phẩm liên kết (không bắt buộc)<input aria-label="Mã sản phẩm liên kết" value={productId} maxLength={128} onChange={event => setProductId(event.target.value)} placeholder="Để trống nếu tài liệu áp dụng chung"/></label><label>Tài liệu PDF, DOCX, TXT, Markdown, JSON hoặc CSV<input aria-label="Tải tài liệu tri thức" type="file" accept=".pdf,.docx,.txt,.md,.json,.csv" disabled={uploading} onChange={event => { void previewFile(event.currentTarget.files?.[0]); event.currentTarget.value = '' }}/></label><small>{uploading ? 'Đang phân tích an toàn…' : 'Tối đa 20 MiB; PDF tối đa 200 trang và cần có lớp văn bản. Tài liệu mới luôn ở trạng thái nháp.'}</small></div>
+    {preview && pendingFile && <div className="admin-knowledge-preview" aria-live="polite"><div><b>Xem trước: {pendingFile.name}</b><p>{preview.chunkCount} đoạn · {preview.totalCharacters.toLocaleString('vi-VN')} ký tự · khoảng {preview.estimatedEmbeddingTokens.toLocaleString('vi-VN')} token embedding</p><p>{preview.costEstimateAvailable ? `Chi phí embedding ước tính: ${vnd(preview.estimatedEmbeddingCostVnd)} (ước lượng theo cấu hình giá hiện tại)` : 'Chưa cấu hình giá Gemini trong ledger; chưa thể ước tính chi phí.'}</p></div><ol>{preview.samples.map(sample => <li key={sample.index}><small>Đoạn {sample.index + 1} · {sample.characters} ký tự</small><p>{sample.text}</p></li>)}</ol><button onClick={() => void upload()} disabled={uploading}>Đưa vào hàng đợi xử lý</button><button onClick={() => { setPreview(null); setPendingFile(null) }} disabled={uploading}>Hủy xem trước</button></div>}
+    {error && <div className="admin-error" role="alert"><b>Không thể hoàn tất thao tác</b><p>{error}</p><button onClick={() => void load()}>Thử lại</button></div>}
+    {jobs.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Tài liệu</th><th>Job</th><th>Xuất bản</th><th>Lượt thử</th><th>Chunks</th><th>Lỗi</th><th></th></tr></thead><tbody>{jobs.map(job => <tr key={job.id}><td><b>{job.name}</b><small>{formatDate(job.createdAt)}</small></td><td><span className={`status status-${job.status}`}>{statusLabel(job.status)}</span></td><td>{job.sourceStatus}</td><td>{job.attempts}/3</td><td>{job.chunkCount}</td><td>{job.errorCode || '—'}</td><td>{job.status === 'queued' && <button onClick={() => void cancel(job)}>Hủy</button>}{job.status === 'failed' && <button onClick={() => void retry(job)}>Thử lại</button>}{job.status === 'completed' && <button onClick={() => void setSourceStatus(job)}>{job.sourceStatus === 'published' ? 'Thu hồi' : 'Xuất bản'}</button>}</td></tr>)}</tbody></table></div> : <div className="empty-table"><b>{loading ? 'Đang tải danh sách…' : 'Chưa có tài liệu AI'}</b></div>}
+    <div className="admin-table-wrap"><h3>Nhật ký thao tác dữ liệu AI</h3><table className="admin-table"><thead><tr><th>Thời gian</th><th>Actor</th><th>Hành động</th><th>Source / Job</th><th>Kết quả</th></tr></thead><tbody>{auditEvents.map(event => <tr key={event.id}><td>{formatDate(event.occurredAt)}</td><td>#{event.actorAccountId}</td><td>{event.action}</td><td>{event.sourceId}<small>{event.jobId}</small></td><td>{event.outcome}</td></tr>)}{auditEvents.length === 0 && <tr><td colSpan={5}>Chưa có thao tác được ghi nhận.</td></tr>}</tbody></table></div>
+  </>
+}
+
 function DataPanel({ section }: { section: string }) {
   const title = names[section]
-  const content = useMemo(() => ({ catalog: <CatalogPanel/>, orders: <OrdersPanel/>, transactions: <TransactionsPanel/>, inventory: <InventoryPanel/>, accounts: <AccountsPanel/>, audit: <AuditPanel/> }[section]), [section])
+  const content = useMemo(() => ({ catalog: <CatalogPanel/>, 'ai-data': <AIDataPanel/>, orders: <OrdersPanel/>, transactions: <TransactionsPanel/>, inventory: <InventoryPanel/>, accounts: <AccountsPanel/>, audit: <AuditPanel/> }[section]), [section])
   return <section className="admin-panel"><div><h2>{title}</h2><p>Dữ liệu thật được tải qua GraphQL và thao tác sẽ được kiểm tra quyền ở máy chủ.</p></div>{content}</section>
 }
 

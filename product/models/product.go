@@ -64,6 +64,9 @@ type Product struct {
 	ModerationStatus     string            `json:"moderationStatus"`
 	ModerationReason     string            `json:"moderationReason"`
 	Media                []ProductMedia    `json:"media"`
+	SourceSystem         string            `json:"sourceSystem,omitempty"`
+	SourceID             string            `json:"sourceId,omitempty"`
+	ImportSnapshotID     string            `json:"importSnapshotId,omitempty"`
 }
 
 type ProductDocument = Product

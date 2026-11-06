@@ -231,6 +231,13 @@ resource "google_storage_bucket" "media" {
   location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+  lifecycle_rule {
+    condition {
+      age            = 1
+      matches_prefix = ["chat-upload/"]
+    }
+    action { type = "Delete" }
+  }
 }
 
 resource "google_storage_bucket" "tfstate" {

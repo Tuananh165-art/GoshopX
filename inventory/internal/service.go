@@ -20,6 +20,7 @@ var (
 
 type Service interface {
 	UpsertStock(ctx context.Context, productID string, quantity, reorderLevel int32) (*models.Stock, *models.Availability, error)
+	InitializeStock(ctx context.Context, productID string, quantity, reorderLevel int32) (*models.Stock, bool, error)
 	GetAvailability(ctx context.Context, productID string) (*models.Availability, error)
 	ReserveStock(ctx context.Context, reservationID string, accountID uint64, productID string, quantity int32, ttl time.Duration, source string) (*models.StockReservation, *models.Availability, error)
 	ReleaseReservation(ctx context.Context, reservationID string) (*models.StockReservation, *models.Availability, error)
@@ -84,6 +85,10 @@ func (service *inventoryService) UpsertStock(ctx context.Context, productID stri
 	})
 
 	return stock, availability, nil
+}
+
+func (service *inventoryService) InitializeStock(ctx context.Context, productID string, quantity, reorderLevel int32) (*models.Stock, bool, error) {
+	return service.repository.InitializeStock(ctx, productID, quantity, reorderLevel)
 }
 
 func (service *inventoryService) GetAvailability(ctx context.Context, productID string) (*models.Availability, error) {

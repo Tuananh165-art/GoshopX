@@ -27,6 +27,7 @@ const (
 	OrderService_ListOrders_FullMethodName          = "/pb.OrderService/ListOrders"
 	OrderService_GetOrder_FullMethodName            = "/pb.OrderService/GetOrder"
 	OrderService_CancelOrder_FullMethodName         = "/pb.OrderService/CancelOrder"
+	OrderService_PreviewCheckout_FullMethodName     = "/pb.OrderService/PreviewCheckout"
 )
 
 // OrderServiceClient is the client API for OrderService service.
@@ -39,6 +40,7 @@ type OrderServiceClient interface {
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
 	GetOrder(ctx context.Context, in *wrapperspb.UInt64Value, opts ...grpc.CallOption) (*PostOrderResponse, error)
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*PostOrderResponse, error)
+	PreviewCheckout(ctx context.Context, in *PreviewCheckoutRequest, opts ...grpc.CallOption) (*CheckoutQuote, error)
 }
 
 type orderServiceClient struct {
@@ -109,6 +111,15 @@ func (c *orderServiceClient) CancelOrder(ctx context.Context, in *CancelOrderReq
 	return out, nil
 }
 
+func (c *orderServiceClient) PreviewCheckout(ctx context.Context, in *PreviewCheckoutRequest, opts ...grpc.CallOption) (*CheckoutQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckoutQuote)
+	if err := c.cc.Invoke(ctx, OrderService_PreviewCheckout_FullMethodName, in, out, cOpts...); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrderServiceServer is the server API for OrderService service.
 // All implementations must embed UnimplementedOrderServiceServer
 // for forward compatibility.
@@ -119,6 +130,7 @@ type OrderServiceServer interface {
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
 	GetOrder(context.Context, *wrapperspb.UInt64Value) (*PostOrderResponse, error)
 	CancelOrder(context.Context, *CancelOrderRequest) (*PostOrderResponse, error)
+	PreviewCheckout(context.Context, *PreviewCheckoutRequest) (*CheckoutQuote, error)
 	mustEmbedUnimplementedOrderServiceServer()
 }
 
@@ -146,6 +158,9 @@ func (UnimplementedOrderServiceServer) GetOrder(context.Context, *wrapperspb.UIn
 }
 func (UnimplementedOrderServiceServer) CancelOrder(context.Context, *CancelOrderRequest) (*PostOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelOrder not implemented")
+}
+func (UnimplementedOrderServiceServer) PreviewCheckout(context.Context, *PreviewCheckoutRequest) (*CheckoutQuote, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PreviewCheckout not implemented")
 }
 func (UnimplementedOrderServiceServer) mustEmbedUnimplementedOrderServiceServer() {}
 func (UnimplementedOrderServiceServer) testEmbeddedByValue()                      {}
@@ -276,6 +291,15 @@ func _OrderService_CancelOrder_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_PreviewCheckout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreviewCheckoutRequest)
+	if err := dec(in); err != nil { return nil, err }
+	if interceptor == nil { return srv.(OrderServiceServer).PreviewCheckout(ctx, in) }
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: OrderService_PreviewCheckout_FullMethodName}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) { return srv.(OrderServiceServer).PreviewCheckout(ctx, req.(*PreviewCheckoutRequest)) }
+	return interceptor(ctx, in, info, handler)
+}
+
 // OrderService_ServiceDesc is the grpc.ServiceDesc for OrderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -306,6 +330,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelOrder",
 			Handler:    _OrderService_CancelOrder_Handler,
+		},
+		{
+			MethodName: "PreviewCheckout",
+			Handler:    _OrderService_PreviewCheckout_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

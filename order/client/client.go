@@ -40,6 +40,18 @@ func (client *Client) PostOrder(
 	products []*models.OrderedProduct,
 	cashOnDelivery bool,
 ) (*models.Order, error) {
+	return client.PostOrderWithCoupon(ctx, accountID, products, cashOnDelivery, "")
+}
+
+func (client *Client) PostOrderWithCoupon(ctx context.Context, accountID uint64, products []*models.OrderedProduct, cashOnDelivery bool, couponCode string) (*models.Order, error) {
+	return client.postOrder(ctx, accountID, products, cashOnDelivery, couponCode, "", 0)
+}
+
+func (client *Client) PostOrderWithQuote(ctx context.Context, accountID uint64, products []*models.OrderedProduct, cashOnDelivery bool, quoteID string, cartVersion uint64) (*models.Order, error) {
+	return client.postOrder(ctx, accountID, products, cashOnDelivery, "", quoteID, cartVersion)
+}
+
+func (client *Client) postOrder(ctx context.Context, accountID uint64, products []*models.OrderedProduct, cashOnDelivery bool, couponCode, quoteID string, cartVersion uint64) (*models.Order, error) {
 	var protoProducts []*pb.OrderProduct
 	for _, p := range products {
 		protoProducts = append(protoProducts, &pb.OrderProduct{
@@ -54,6 +66,9 @@ func (client *Client) PostOrder(
 			AccountId:      accountID,
 			Products:       protoProducts,
 			CashOnDelivery: cashOnDelivery,
+			CouponCode:     couponCode,
+			QuoteId:        quoteID,
+			CartVersion:    cartVersion,
 		},
 	)
 	if err != nil {
@@ -67,12 +82,29 @@ func (client *Client) PostOrder(
 		return nil, err
 	}
 	return &models.Order{
-		ID:         uint(r.Order.GetId()),
-		CreatedAt:  newOrderCreatedAt,
-		TotalPrice: newOrder.TotalPrice,
-		AccountID:  newOrder.AccountId,
-		Products:   products,
+		ID:            uint(r.Order.GetId()),
+		CreatedAt:     newOrderCreatedAt,
+		TotalPrice:    newOrder.TotalPrice,
+		SubtotalVND:   newOrder.SubtotalVnd,
+		DiscountVND:   newOrder.DiscountVnd,
+		TotalPriceVND: newOrder.TotalPriceVnd,
+		CouponCode:    newOrder.CouponCode,
+		AccountID:     newOrder.AccountId,
+		Products:      products,
 	}, nil
+}
+
+func (client *Client) PreviewCheckout(ctx context.Context, accountID uint64, products []*models.OrderedProduct, couponCode string, cartVersion uint64) (*models.CheckoutQuote, error) {
+	items := make([]*pb.OrderProduct, 0, len(products))
+	for _, product := range products {
+		items = append(items, &pb.OrderProduct{Id: product.ID, Quantity: product.Quantity})
+	}
+	quote, err := client.service.PreviewCheckout(ctx, &pb.PreviewCheckoutRequest{AccountId: accountID, Products: items, CouponCode: couponCode, CartVersion: cartVersion})
+	if err != nil {
+		return nil, err
+	}
+	return &models.CheckoutQuote{ID: quote.Id, SubtotalVND: quote.SubtotalVnd, DiscountVND: quote.DiscountVnd, TotalPriceVND: quote.TotalPriceVnd,
+		CouponCode: quote.CouponCode, ExpiresAt: time.Unix(quote.ExpiresAtUnix, 0).UTC(), CartVersion: quote.CartVersion}, nil
 }
 
 func (client *Client) GetOrdersForAccount(ctx context.Context, accountID uint64) ([]models.Order, error) {
@@ -90,6 +122,10 @@ func (client *Client) GetOrdersForAccount(ctx context.Context, accountID uint64)
 		newOrder := models.Order{
 			ID:            uint(orderProto.Id),
 			TotalPrice:    orderProto.TotalPrice,
+			SubtotalVND:   orderProto.SubtotalVnd,
+			DiscountVND:   orderProto.DiscountVnd,
+			TotalPriceVND: orderProto.TotalPriceVnd,
+			CouponCode:    orderProto.CouponCode,
 			AccountID:     orderProto.AccountId,
 			Status:        orderProto.Status,
 			PaymentStatus: orderProto.PaymentStatus,
@@ -135,7 +171,7 @@ func decodeOrder(order *pb.Order) (*models.Order, error) {
 	if err := createdAt.UnmarshalBinary(order.CreatedAt); err != nil {
 		return nil, err
 	}
-	result := &models.Order{ID: uint(order.Id), CreatedAt: createdAt, AccountID: order.AccountId, TotalPrice: order.TotalPrice, Status: order.Status, PaymentStatus: order.PaymentStatus}
+	result := &models.Order{ID: uint(order.Id), CreatedAt: createdAt, AccountID: order.AccountId, TotalPrice: order.TotalPrice, SubtotalVND: order.SubtotalVnd, DiscountVND: order.DiscountVnd, TotalPriceVND: order.TotalPriceVnd, CouponCode: order.CouponCode, Status: order.Status, PaymentStatus: order.PaymentStatus}
 	for _, item := range order.Products {
 		result.Products = append(result.Products, &models.OrderedProduct{ID: item.Id, Name: item.Name, Description: item.Description, Price: item.Price, Quantity: item.Quantity})
 	}

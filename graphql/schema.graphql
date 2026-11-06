@@ -80,7 +80,14 @@ type RecommendationChatProduct {
     stock: Int!
     retrievalScore: Float!
     matchedReasons: [String!]!
+    brand: String!
+    sku: String!
+    warrantyInformation: String!
+    shippingInformation: String!
+    returnPolicy: String!
 }
+
+type RecommendationChatSource { title: String!, url: String!, publishedAt: String! }
 
 type RecommendationChatResponse {
     answer: String!
@@ -88,6 +95,8 @@ type RecommendationChatResponse {
     nextSuggestions: [String!]!
     warnings: [String!]!
     requestId: String!
+    sessionId: String!
+    sources: [RecommendationChatSource!]!
 }
 
 type ProductMedia { id: String!, url: String!, altText: String!, sortOrder: Int! }
@@ -105,8 +114,18 @@ type CartItem {
 
 type Cart {
     accountId: Int!
+    version: String!
     expiresAt: Time!
     items: [CartItem!]!
+}
+
+type CartProposalItem { productId: String!, quantity: Int! }
+input CartProposalItemInput { productId: String!, quantity: Int! }
+type CartProposal {
+    id: String!
+    baseVersion: String!
+    expiresAt: Time!
+    items: [CartProposalItem!]!
 }
 
 type Notification {
@@ -179,6 +198,11 @@ type AdminOrder { id: Int!, accountId: Int!, totalPrice: Float!, status: String!
 type PaymentTransaction { orderId: Int!, userId: Int!, paymentId: String!, totalPrice: Int!, settledPrice: Int!, currency: String!, status: String! }
 type RefundResult { providerRefundId: String!, status: String!, amount: Int! }
 type StockReservation { reservationId: String!, accountId: Int!, productId: String!, quantity: Int!, status: String!, source: String!, expiresAt: Time! }
+type KnowledgeIngestionJob { id: ID!, sourceId: ID!, name: String!, status: String!, sourceStatus: String!, attempts: Int!, errorCode: String!, createdAt: Time!, chunkCount: Int! }
+type KnowledgeDocumentChunkPreview { index: Int!, text: String!, characters: Int! }
+type KnowledgeDocumentPreview { chunkCount: Int!, totalCharacters: Int!, estimatedEmbeddingTokens: Int!, estimatedEmbeddingCostVnd: Int!, costEstimateAvailable: Boolean!, samples: [KnowledgeDocumentChunkPreview!]! }
+type KnowledgeIngestionAuditEvent { id: ID!, actorAccountId: Int!, action: String!, sourceId: ID!, jobId: ID!, outcome: String!, occurredAt: Time! }
+type CheckoutQuote { id: ID!, subtotalVnd: String!, discountVnd: String!, totalPriceVnd: String!, couponCode: String!, expiresAt: Time!, cartVersion: String! }
 
 input PaginationInput {
     skip: Int!
@@ -282,6 +306,7 @@ type Mutation {
     updateMyProfile(input: ProfileInput!): Account!
     logout: Boolean!
     recommendChat(input: RecommendationChatInput!): RecommendationChatResponse!
+    deleteChatSession(sessionId: String!): Boolean!
     createProduct(product: CreateProductInput!): Product
     updateProduct(product: UpdateProductInput!): Product
     deleteProduct(id: String!): Boolean
@@ -291,11 +316,13 @@ type Mutation {
     upsertProductStock(input: UpsertProductStockInput!): InventoryAvailability!
     addCartItem(productId: String!, quantity: Int!): Cart!
     updateCartItemQuantity(productId: String!, quantity: Int!): Cart!
+    createCartProposal(expectedCartVersion: String!, idempotencyKey: String!, items: [CartProposalItemInput!]!): CartProposal!
+    confirmCartProposal(proposalId: String!): Cart!
     addProductReview(productId: String!, rating: Int!, comment: String!): Product!
     removeCartItem(productId: String!): Cart!
     clearCart: Boolean!
-    checkoutCart(redirectUrl: String!): RedirectResponse!
-    checkoutCartCOD: CODCheckoutResponse!
+    checkoutCart(redirectUrl: String!, quoteId: ID!, cartVersion: String!): RedirectResponse!
+    checkoutCartCOD(quoteId: ID!, cartVersion: String!): CODCheckoutResponse!
     markNotificationRead(id: Int!): Boolean!
     markAllNotificationsRead: Int!
     suspendAccount(id: Int!): Boolean!
@@ -311,9 +338,15 @@ type Mutation {
     adminCancelOrder(orderId: Int!, reason: String!): AdminOrder!
     adminRequestRefund(input: RefundInput!): RefundResult!
     adminAdjustInventory(input: InventoryAdjustmentInput!): InventoryAvailability!
+    adminUploadKnowledgeDocument(file: Upload!, idempotencyKey: String!, productId: String): KnowledgeIngestionJob!
+    adminPreviewKnowledgeDocument(file: Upload!): KnowledgeDocumentPreview!
+    adminCancelKnowledgeIngestionJob(id: ID!): Boolean!
+    adminRetryKnowledgeIngestionJob(id: ID!): Boolean!
+    adminSetKnowledgeSourceStatus(sourceId: ID!, status: String!): Boolean!
 }
 
 type Query{
+    previewCartCheckout(couponCode: String): CheckoutQuote!
     accounts(pagination: PaginationInput, id: Int): [Account!]!
     adminAccounts(pagination: PaginationInput): [Account!]!
     me: Account
@@ -334,4 +367,6 @@ type Query{
     adminReconcileTransaction(paymentId: String!): PaymentTransaction!
     adminLowStock(limit: Int! = 50): [InventoryAvailability!]!
     adminReservations(status: String, pagination: PaginationInput): [StockReservation!]!
+    adminKnowledgeIngestionJobs(limit: Int = 50): [KnowledgeIngestionJob!]!
+    adminKnowledgeIngestionAuditEvents(limit: Int = 100): [KnowledgeIngestionAuditEvent!]!
 }

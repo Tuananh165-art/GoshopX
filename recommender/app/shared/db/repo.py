@@ -1,5 +1,6 @@
 import pandas as pd
 import json
+from vector.documents import product_content_hash
 
 from recommendations.weights import PURCHASE_WEIGHT, VIEW_WEIGHT
 from shared.db.models import Interaction, Product
@@ -74,6 +75,14 @@ def create_product(session, product_data: dict) -> None:
             publish_status=product_data.get("publishStatus", "published"),
             moderation_status=product_data.get("moderationStatus", "approved"),
             stock=int(product_data.get("stock", 1) or 0),
+            rating=float(product_data.get("rating", 0) or 0),
+            discount_percentage=float(product_data.get("discountPercentage", 0) or 0),
+            sku=product_data.get("sku", ""),
+            warranty_information=product_data.get("warrantyInformation", ""),
+            shipping_information=product_data.get("shippingInformation", ""),
+            return_policy=product_data.get("returnPolicy", ""),
+            availability_status=product_data.get("availabilityStatus", ""),
+            source_hash=product_content_hash(product_data),
         )
     )
 
@@ -91,14 +100,34 @@ def update_product(session, product_data: dict) -> None:
     product.images_json = json.dumps(product_data.get("images", json.loads(product.images_json or "[]")), ensure_ascii=False)
     product.publish_status = product_data.get("publishStatus", product.publish_status)
     product.moderation_status = product_data.get("moderationStatus", product.moderation_status)
-    product.stock = int(product_data.get("stock", product.stock) or 0)
+    # Inventory owns stock; catalog refreshes must not restore a stale snapshot.
+    product.rating = float(product_data.get("rating", product.rating) or 0)
+    product.discount_percentage = float(product_data.get("discountPercentage", product.discount_percentage) or 0)
+    product.sku = product_data.get("sku", product.sku)
+    product.warranty_information = product_data.get("warrantyInformation", product.warranty_information)
+    product.shipping_information = product_data.get("shippingInformation", product.shipping_information)
+    product.return_policy = product_data.get("returnPolicy", product.return_policy)
+    product.availability_status = product_data.get("availabilityStatus", product.availability_status)
+    product.source_hash = product_content_hash(product_data)
 
 
-def create_or_update_product(session, product_data: dict) -> None:
-    if get_product_by_id(session, product_data["product_id"]):
+def create_or_update_product(session, product_data: dict) -> bool:
+    product = get_product_by_id(session, product_data["product_id"])
+    content_hash = product_content_hash(product_data)
+    changed = product is None or product.source_hash != content_hash or product.indexed_hash != content_hash
+    if product:
         update_product(session, product_data)
     else:
         create_product(session, product_data)
+    session.commit()
+    return changed
+
+
+def mark_product_indexed(session, product_id: str) -> None:
+    product = get_product_by_id(session, product_id)
+    if product is None:
+        raise ValueError("cannot mark a missing product as indexed")
+    product.indexed_hash = product.source_hash
     session.commit()
 
 

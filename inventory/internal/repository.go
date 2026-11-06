@@ -18,6 +18,7 @@ var ErrStockNotFound = errors.New("stock not found")
 type Repository interface {
 	Close()
 	UpsertStock(ctx context.Context, productID string, quantity, reorderLevel int32) (*models.Stock, error)
+	InitializeStock(ctx context.Context, productID string, quantity, reorderLevel int32) (*models.Stock, bool, error)
 	GetAvailability(ctx context.Context, productID string) (*models.Availability, error)
 	ReserveStock(ctx context.Context, reservationID string, accountID uint64, productID string, quantity int32, expiresAt time.Time, source string) (*models.StockReservation, *models.Availability, error)
 	ReleaseReservation(ctx context.Context, reservationID string) (*models.StockReservation, *models.Availability, error)
@@ -124,6 +125,24 @@ func (repository *postgresRepository) UpsertStock(ctx context.Context, productID
 	}
 
 	return stock, nil
+}
+
+func (repository *postgresRepository) InitializeStock(ctx context.Context, productID string, quantity, reorderLevel int32) (*models.Stock, bool, error) {
+	if productID == "" || quantity < 0 || reorderLevel < 0 {
+		return nil, false, ErrInvalidQuantity
+	}
+	stock := &models.Stock{ProductID: productID, Quantity: quantity, ReorderLevel: reorderLevel, UpdatedAt: time.Now().UTC()}
+	result := repository.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(stock)
+	if result.Error != nil {
+		return nil, false, result.Error
+	}
+	created := result.RowsAffected == 1
+	if !created {
+		if err := repository.db.WithContext(ctx).First(stock, "product_id = ?", productID).Error; err != nil {
+			return nil, false, err
+		}
+	}
+	return stock, created, nil
 }
 
 func (repository *postgresRepository) GetAvailability(ctx context.Context, productID string) (*models.Availability, error) {

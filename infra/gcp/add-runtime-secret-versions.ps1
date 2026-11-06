@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
   [string]$Project = "generated-mote-467410-b0",
-  [string]$EnvPath
+  [string]$EnvPath,
+  [switch]$RefreshProviderKeys
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,7 +42,14 @@ $Mappings = @(
   @{ Secret = "goshopx-smtp-password"; Env = "GMAIL_PASSWORD" },
   @{ Secret = "goshopx-gmail-from"; Env = "GMAIL_FROM" },
   @{ Secret = "goshopx-deepseek-api-key"; Env = "DEEPSEEK_API_KEY"; FallbackEnv = "AI_API_KEY" },
-  @{ Secret = "goshopx-gemini-api-key"; Env = "GEMINI_API_KEY" }
+  @{ Secret = "goshopx-gemini-api-key"; Env = "GEMINI_API_KEY" },
+  @{ Secret = "goshopx-tavily-api-key"; Env = "TAVILY_API_KEY" },
+  @{ Secret = "goshopx-typesafe-api-key"; Env = "TYPESAFE_API_KEY" },
+  @{ Secret = "goshopx-langsmith-api-key"; Env = "LANGSMITH_API_KEY" }
+)
+$ProviderSecrets = @(
+  "goshopx-deepseek-api-key", "goshopx-gemini-api-key",
+  "goshopx-tavily-api-key", "goshopx-typesafe-api-key", "goshopx-langsmith-api-key"
 )
 
 $NeedsInput = @()
@@ -68,7 +76,7 @@ foreach ($Mapping in $Mappings) {
   }
 
   $LatestState = ([string]::Join(",", $LatestStateOutput)).Trim()
-  if ($LatestState -eq "enabled") {
+  if ($LatestState -eq "enabled" -and (-not $RefreshProviderKeys -or $Mapping.Secret -notin $ProviderSecrets)) {
     Write-Host "Đã có version enabled, bỏ qua: $($Mapping.Secret)"
     continue
   }

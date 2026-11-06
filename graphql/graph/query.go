@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strconv"
 	"time"
 
 	accountmodels "github.com/Tuananh165art/GoshopX/account/models"
@@ -214,6 +215,37 @@ func (resolver *queryResolver) MyCart(ctx context.Context) (*generated.Cart, err
 		return nil, err
 	}
 	return buildCart(ctx, resolver.server, cartSnapshot)
+}
+
+func (resolver *queryResolver) PreviewCartCheckout(ctx context.Context, couponCode *string) (*generated.CheckoutQuote, error) {
+	accountID, err := auth.GetUserIdInt(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	cart, err := resolver.server.cartClient.GetCart(ctx, uint64(accountID))
+	if err != nil {
+		return nil, err
+	}
+	if len(cart.Items) == 0 {
+		return nil, errors.New("cart is empty")
+	}
+	products := make([]*ordermodels.OrderedProduct, 0, len(cart.Items))
+	for _, item := range cart.Items {
+		if item.Quantity <= 0 {
+			return nil, errors.New("cart contains an invalid quantity")
+		}
+		products = append(products, &ordermodels.OrderedProduct{ID: item.ProductID, Quantity: uint32(item.Quantity)})
+	}
+	code := ""
+	if couponCode != nil {
+		code = *couponCode
+	}
+	quote, err := resolver.server.orderClient.PreviewCheckout(ctx, uint64(accountID), products, code, cart.Version)
+	if err != nil {
+		return nil, err
+	}
+	return &generated.CheckoutQuote{ID: quote.ID, SubtotalVnd: strconv.FormatInt(quote.SubtotalVND, 10), DiscountVnd: strconv.FormatInt(quote.DiscountVND, 10), TotalPriceVnd: strconv.FormatInt(quote.TotalPriceVND, 10),
+		CouponCode: quote.CouponCode, ExpiresAt: quote.ExpiresAt, CartVersion: strconv.FormatUint(quote.CartVersion, 10)}, nil
 }
 
 func (resolver *queryResolver) MyOrders(ctx context.Context) ([]*generated.Order, error) {
@@ -496,6 +528,63 @@ func (resolver *queryResolver) AdminReservations(ctx context.Context, status *st
 	return result, nil
 }
 
+func (resolver *queryResolver) AdminKnowledgeIngestionJobs(ctx context.Context, limit *int) ([]*generated.KnowledgeIngestionJob, error) {
+	if !auth.HasAnyRole(ctx, "operations_admin", "platform_admin") {
+		return nil, errors.New("forbidden")
+	}
+	count := uint32(50)
+	if limit != nil && *limit > 0 {
+		count = uint32(min(*limit, 100))
+	}
+	response, err := resolver.server.recommenderClient.ListKnowledgeIngestionJobs(ctx, count)
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]*generated.KnowledgeIngestionJob, 0, len(response.Jobs))
+	for _, job := range response.Jobs {
+		jobs = append(jobs, toGeneratedKnowledgeJob(job))
+	}
+	return jobs, nil
+}
+
+func (resolver *queryResolver) AdminKnowledgeIngestionAuditEvents(ctx context.Context, limit *int) ([]*generated.KnowledgeIngestionAuditEvent, error) {
+	if !auth.HasAnyRole(ctx, "operations_admin", "platform_admin") {
+		return nil, errors.New("forbidden")
+	}
+	count := uint32(100)
+	if limit != nil && *limit > 0 {
+		count = uint32(min(*limit, 200))
+	}
+	response, err := resolver.server.recommenderClient.ListIngestionAuditEvents(ctx, count)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]*generated.KnowledgeIngestionAuditEvent, 0, len(response.Events))
+	for _, event := range response.Events {
+		events = append(events, &generated.KnowledgeIngestionAuditEvent{
+			ID: event.Id, ActorAccountID: int(event.ActorAccountId), Action: event.Action,
+			SourceID: event.SourceId, JobID: event.JobId, Outcome: event.Outcome,
+			OccurredAt: time.Unix(event.OccurredAtUnix, 0),
+		})
+	}
+	return events, nil
+}
+
+func toGeneratedKnowledgeJob(job interface {
+	GetId() string
+	GetSourceId() string
+	GetName() string
+	GetStatus() string
+	GetAttempts() uint32
+	GetErrorCode() string
+	GetCreatedAtUnix() int64
+	GetChunkCount() uint32
+	GetSourceStatus() string
+}) *generated.KnowledgeIngestionJob {
+	createdAt := time.Unix(job.GetCreatedAtUnix(), 0)
+	return &generated.KnowledgeIngestionJob{ID: job.GetId(), SourceID: job.GetSourceId(), Name: job.GetName(), Status: job.GetStatus(), SourceStatus: job.GetSourceStatus(), Attempts: int(job.GetAttempts()), ErrorCode: job.GetErrorCode(), CreatedAt: createdAt, ChunkCount: int(job.GetChunkCount())}
+}
+
 func (resolver *queryResolver) toGeneratedProductWithAvailability(ctx context.Context, product *productmodels.Product) *generated.Product {
 	result := toGeneratedProduct(product)
 	availability, err := resolver.server.inventoryClient.GetAvailability(ctx, product.ID)
@@ -528,6 +617,7 @@ func buildCart(ctx context.Context, server *Server, cartSnapshot *cartmodels.Car
 
 	result := &generated.Cart{
 		AccountID: int(cartSnapshot.AccountID),
+		Version:   strconv.FormatUint(cartSnapshot.Version, 10),
 		ExpiresAt: cartSnapshot.ExpiresAt,
 		Items:     make([]*generated.CartItem, 0, len(cartSnapshot.Items)),
 	}

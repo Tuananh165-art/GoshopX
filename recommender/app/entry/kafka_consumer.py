@@ -6,53 +6,37 @@ from loguru import logger
 from sqlalchemy.exc import IntegrityError
 
 from shared.config.settings import (
-    AI_API_KEY,
-    AI_ENDPOINT,
-    AI_MODEL,
-    GEMINI_API_KEY,
-    GEMINI_EMBEDDING_MODEL,
     INTERACTION_EVENTS_TOPIC,
     INVENTORY_EVENTS_TOPIC,
     KAFKA_SERVER,
-    MILVUS_COLLECTION,
-    MILVUS_URI,
     PRODUCT_API,
-    TEXT_EMBEDDING_DIMENSION,
     PRODUCT_EVENTS_TOPIC,
 )
-from chat.llm_client import LLMClient
-from vector.indexer import ProductIndexer, build_product_indexer
+from vector.indexer import ProductIndexer
+from vector.runtime_index import write_indexers
 from shared.db.repo import (
     create_or_update_product,
     create_product,
     delete_product_by_id,
     get_product_by_id,
+    mark_product_indexed,
     record_interaction,
 )
 from shared.db.session import get_session
+from shared.spend import ProviderSpendLedger
 from shared.kafka.utils import product_is_created_or_updated, product_is_deleted
 from shared.product.utils import fetch_product_by_id, normalize_product_data
 from shared.db.stock import update_product_stock
 
-_indexer: ProductIndexer | None = None
+_spend_ledger = ProviderSpendLedger()
 
 
 def _get_indexer() -> ProductIndexer:
-    global _indexer
-    if _indexer is None:
-        vision_llm = None
-        if AI_API_KEY:
-            vision_llm = LLMClient(AI_ENDPOINT, AI_API_KEY, AI_MODEL)
-        _indexer = build_product_indexer(
-            uri=MILVUS_URI,
-            collection=MILVUS_COLLECTION,
-            image_collection=f"{MILVUS_COLLECTION}_images",
-            dimension=TEXT_EMBEDDING_DIMENSION,
-            vision_llm=vision_llm,
-            gemini_api_key=GEMINI_API_KEY,
-            gemini_model=GEMINI_EMBEDDING_MODEL,
-        )
-    return _indexer
+    return write_indexers(_spend_ledger)[0]
+
+
+def _get_indexers() -> list[ProductIndexer]:
+    return write_indexers(_spend_ledger)
 
 
 def _bootstrap_catalog_from_product_api() -> int:
@@ -62,6 +46,7 @@ def _bootstrap_catalog_from_product_api() -> int:
     page_size = 200
     total = 0
     skip = 0
+    index_errors = 0
     while True:
         try:
             response = requests.get(PRODUCT_API, params={"skip": skip, "take": page_size}, timeout=60)
@@ -76,6 +61,7 @@ def _bootstrap_catalog_from_product_api() -> int:
             break
         if not isinstance(page, list) or not page:
             break
+        pending: list[dict] = []
         with get_session() as session:
             for raw in page:
                 try:
@@ -84,7 +70,7 @@ def _bootstrap_catalog_from_product_api() -> int:
                     logger.warning("Skipping malformed product during bootstrap: {}", exc)
                     continue
                 try:
-                    create_or_update_product(session, normalized)
+                    changed = create_or_update_product(session, normalized)
                 except IntegrityError as exc:
                     session.rollback()
                     logger.warning("Skipping product {} due to integrity error: {}", normalized.get("product_id"), exc.orig)
@@ -93,24 +79,30 @@ def _bootstrap_catalog_from_product_api() -> int:
                     session.rollback()
                     logger.error("Skipping product {} due to error: {}", normalized.get("product_id"), exc)
                     continue
-        indexer = _get_indexer()
-        for raw in page:
+                if changed:
+                    pending.append(normalized)
+        if pending:
             try:
-                normalized = normalize_product_data(raw)
-                indexer.upsert(normalized)
-            except (KeyError, TypeError, ValueError):
-                continue
+                for indexer in _get_indexers():
+                    indexer.upsert(pending)
+                with get_session() as session:
+                    for product in pending:
+                        mark_product_indexed(session, product["product_id"])
+            except Exception as exc:  # noqa: BLE001
+                index_errors += len(pending)
+                logger.error("Index update failed for {} products in page starting at {}: {}", len(pending), skip, exc)
         total += len(page)
         logger.info("Bootstrap ingested page starting at {} ({} products so far)", skip, total)
         if len(page) < page_size:
             break
         skip += page_size
     logger.info("Catalog bootstrap complete: {} products ingested", total)
+    if index_errors:
+        raise RuntimeError(f"catalog bootstrap left {index_errors} product vectors pending; rerun to retry")
     return total
 
 
 def start_kafka_consumer() -> None:
-    _bootstrap_catalog_from_product_api()
     consumer = KafkaConsumer(
         PRODUCT_EVENTS_TOPIC,
         INTERACTION_EVENTS_TOPIC,
@@ -139,12 +131,16 @@ def _handle_product_event(event: dict) -> None:
                 event["type"],
                 product_data["product_id"],
             )
-            create_or_update_product(session, product_data)
-            _get_indexer().upsert(product_data)
+            changed = create_or_update_product(session, product_data)
+            if changed:
+                for indexer in _get_indexers():
+                    indexer.upsert(product_data)
+                mark_product_indexed(session, str(product_data["product_id"]))
         elif product_is_deleted(event):
             product_id = event["data"]["product_id"]
             delete_product_by_id(session, product_id)
-            _get_indexer().delete(product_id)
+            for indexer in _get_indexers():
+                indexer.delete(product_id)
 
 
 def _handle_interaction_event(event: dict) -> None:
@@ -185,20 +181,7 @@ def _handle_inventory_event(event: dict) -> None:
         product = update_product_stock(session, str(product_id), int(available))
         if product is None:
             return
-        _get_indexer().upsert({
-            "id": product.id,
-            "name": product.name,
-            "description": product.description,
-            "price": product.price,
-            "category": product.category,
-            "brand": product.brand,
-            "tags": json.loads(product.tags_json or "[]"),
-            "thumbnail": product.thumbnail,
-            "images": json.loads(product.images_json or "[]"),
-            "publishStatus": product.publish_status,
-            "moderationStatus": product.moderation_status,
-            "stock": product.stock,
-        })
+        # Stock is read from the live PostgreSQL projection and does not affect vectors.
 
 
 if __name__ == "__main__":

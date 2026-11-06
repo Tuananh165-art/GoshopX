@@ -9,7 +9,8 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 - [GKE Pod Recovery](./gcp/pod-recovery.md): targeted recovery for Kafka PVC `lost+found`, MinIO image removal, Milvus GCS/Workload Identity, GraphQL media and Kibana OOM.
 - [GCP Teardown Runbook](./gcp/teardown.md): ordered rollback, stateful data handling, destroy and residual-billing checks.
 - [k6 Load Testing](./load-testing.md): smoke/load/stress/soak profiles, RPS/VU/CCU definitions and reporting rules.
-- [Chatbot Agentic RAG](./chatbot-agentic-rag.md): current LangGraph routes, multimodal retrieval, config and unimplemented provider/action gates.
+- [Chatbot Agentic RAG](./chatbot-agentic-rag.md): LangGraph routes, BM25+dense retrieval, bounded tools, PostgreSQL memory, config and remaining delivery gates.
+- [Chatbot Provider GKE Runbook](./chatbot-provider-gke-runbook.md): safe provider secret sync, GitOps rollout, low-volume real-provider smoke, cost checks and stop conditions.
 - [Repository Review](./audit/20261105-repository-review.md): evidence, fixed defects and unresolved audit items.
 - [GCP Architecture Diagram](./diagrams/gcp-lab-architecture.html): editable themed HTML source with standalone SVG, PNG and renderer.
 

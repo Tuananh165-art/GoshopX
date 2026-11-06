@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net"
 
 	account "github.com/Tuananh165art/GoshopX/account/client"
@@ -26,7 +27,7 @@ type grpcServer struct {
 }
 
 func encodeOrder(order *models.Order) *pb.Order {
-	result := &pb.Order{Id: uint64(order.ID), AccountId: order.AccountID, TotalPrice: order.TotalPrice, Status: order.Status, PaymentStatus: order.PaymentStatus, Products: make([]*pb.ProductInfo, 0, len(order.Products))}
+	result := &pb.Order{Id: uint64(order.ID), AccountId: order.AccountID, TotalPrice: order.TotalPrice, Status: order.Status, PaymentStatus: order.PaymentStatus, SubtotalVnd: order.SubtotalVND, DiscountVnd: order.DiscountVND, TotalPriceVnd: order.TotalPriceVND, CouponCode: order.CouponCode, Products: make([]*pb.ProductInfo, 0, len(order.Products))}
 	result.CreatedAt, _ = order.CreatedAt.MarshalBinary()
 	for _, product := range order.Products {
 		result.Products = append(result.Products, &pb.ProductInfo{Id: product.ID, Name: product.Name, Description: product.Description, Price: product.Price, Quantity: product.Quantity})
@@ -72,7 +73,18 @@ func (server *grpcServer) PostOrder(ctx context.Context, request *pb.PostOrderRe
 		return nil, err
 	}
 	var productIDs []string
+	seenProducts := make(map[string]struct{}, len(request.GetProducts()))
+	if len(request.GetProducts()) == 0 || len(request.GetProducts()) > 100 {
+		return nil, ErrInvalidOrderTotal
+	}
 	for _, p := range request.Products {
+		if p == nil || p.GetId() == "" || p.GetQuantity() == 0 {
+			return nil, ErrInvalidOrderTotal
+		}
+		if _, exists := seenProducts[p.GetId()]; exists {
+			return nil, ErrInvalidOrderTotal
+		}
+		seenProducts[p.GetId()] = struct{}{}
 		productIDs = append(productIDs, p.Id)
 	}
 	orderedProducts, err := server.productClient.GetProducts(ctx, 0, 0, productIDs, "")
@@ -85,11 +97,15 @@ func (server *grpcServer) PostOrder(ctx context.Context, request *pb.PostOrderRe
 	totalPrice := 0.0
 
 	for _, p := range orderedProducts {
+		unitPrice, priceErr := discountedUnitPriceVND(p.Price, p.DiscountPercentage)
+		if priceErr != nil {
+			return nil, fmt.Errorf("product %s has an invalid discounted VND price", p.ID)
+		}
 		productObj := &models.OrderedProduct{
 			ID:          p.ID,
 			Name:        p.Name,
 			Description: p.Description,
-			Price:       p.Price,
+			Price:       float64(unitPrice),
 			Quantity:    0,
 		}
 		for _, requestProduct := range request.Products {
@@ -105,17 +121,26 @@ func (server *grpcServer) PostOrder(ctx context.Context, request *pb.PostOrderRe
 		}
 	}
 
-	postOrder, err := server.service.PostOrder(ctx, request.AccountId, totalPrice, products, request.GetCashOnDelivery())
+	var postOrder *models.Order
+	if request.GetQuoteId() != "" {
+		postOrder, err = server.service.PostOrderWithQuote(ctx, request.AccountId, totalPrice, products, request.GetCashOnDelivery(), request.GetQuoteId(), request.GetCartVersion())
+	} else {
+		postOrder, err = server.service.PostOrderWithCoupon(ctx, request.AccountId, totalPrice, products, request.GetCashOnDelivery(), request.GetCouponCode())
+	}
 	if err != nil {
 		log.Println("Error posting postOrder", err)
 		return nil, err
 	}
 
 	orderProto := &pb.Order{
-		Id:         uint64(postOrder.ID),
-		AccountId:  postOrder.AccountID,
-		TotalPrice: postOrder.TotalPrice,
-		Products:   []*pb.ProductInfo{},
+		Id:            uint64(postOrder.ID),
+		AccountId:     postOrder.AccountID,
+		TotalPrice:    postOrder.TotalPrice,
+		SubtotalVnd:   postOrder.SubtotalVND,
+		DiscountVnd:   postOrder.DiscountVND,
+		TotalPriceVnd: postOrder.TotalPriceVND,
+		CouponCode:    postOrder.CouponCode,
+		Products:      []*pb.ProductInfo{},
 	}
 	orderProto.CreatedAt, _ = postOrder.CreatedAt.MarshalBinary()
 	for _, p := range postOrder.Products {
@@ -237,4 +262,50 @@ func (server *grpcServer) CancelOrder(ctx context.Context, request *pb.CancelOrd
 		return nil, err
 	}
 	return &pb.PostOrderResponse{Order: encodeOrder(order)}, nil
+}
+
+func (server *grpcServer) PreviewCheckout(ctx context.Context, request *pb.PreviewCheckoutRequest) (*pb.CheckoutQuote, error) {
+	if request.GetAccountId() == 0 || len(request.GetProducts()) == 0 || len(request.GetProducts()) > 100 {
+		return nil, ErrInvalidOrderTotal
+	}
+	if _, err := server.accountClient.GetAccount(ctx, request.GetAccountId()); err != nil {
+		return nil, err
+	}
+	quantities := make(map[string]uint32, len(request.GetProducts()))
+	ids := make([]string, 0, len(request.GetProducts()))
+	for _, item := range request.GetProducts() {
+		if item == nil || item.GetId() == "" || item.GetQuantity() == 0 {
+			return nil, ErrInvalidOrderTotal
+		}
+		if _, exists := quantities[item.GetId()]; exists {
+			return nil, ErrInvalidOrderTotal
+		}
+		quantities[item.GetId()] = item.GetQuantity()
+		ids = append(ids, item.GetId())
+	}
+	products, err := server.productClient.GetProducts(ctx, 0, 0, ids, "")
+	if err != nil {
+		return nil, err
+	}
+	if len(products) != len(ids) {
+		return nil, ErrInvalidOrderTotal
+	}
+	var subtotal int64
+	for _, item := range products {
+		price, err := discountedUnitPriceVND(item.Price, item.DiscountPercentage)
+		if err != nil || int64(quantities[item.ID]) > (math.MaxInt64-subtotal)/price {
+			return nil, ErrInvalidOrderTotal
+		}
+		subtotal += price * int64(quantities[item.ID])
+	}
+	quoteProducts := make([]*models.OrderedProduct, 0, len(products))
+	for _, item := range products {
+		quoteProducts = append(quoteProducts, &models.OrderedProduct{ID: item.ID, Quantity: quantities[item.ID]})
+	}
+	quote, err := server.service.PreviewCheckout(ctx, request.GetAccountId(), subtotal, quoteProducts, request.GetCouponCode(), request.GetCartVersion())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.CheckoutQuote{SubtotalVnd: quote.SubtotalVND, DiscountVnd: quote.DiscountVND, TotalPriceVnd: quote.TotalPriceVND,
+		CouponCode: quote.CouponCode, ExpiresAtUnix: quote.ExpiresAt.Unix(), CartVersion: quote.CartVersion, Id: quote.ID}, nil
 }

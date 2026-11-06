@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/IBM/sarama"
+	orderclient "github.com/Tuananh165art/GoshopX/order/client"
 	"github.com/Tuananh165art/GoshopX/payment/config"
 	"github.com/Tuananh165art/GoshopX/payment/internal"
 	"github.com/Tuananh165art/GoshopX/payment/vnpay"
@@ -50,6 +51,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer catalog.Close()
-	service := internal.NewVNPAYPaymentServiceWithCatalog(client, repo, producer, catalog)
+	orders, err := orderclient.NewClient(config.OrderServiceURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer orders.Close()
+	service := internal.NewVNPAYPaymentServiceWithCommerce(client, repo, producer, catalog, orders)
 	log.Fatal(internal.StartServers(service, nil, config.OrderServiceURL, config.InventoryServiceURL, config.CartServiceURL, config.GrpcPort, config.WebhookPort))
 }

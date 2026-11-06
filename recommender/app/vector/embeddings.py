@@ -6,6 +6,7 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -14,6 +15,8 @@ from typing import Any, Protocol
 
 
 MAX_IMAGE_BYTES = 5 << 20
+MAX_IMAGE_BATCH_BYTES = 8 << 20
+MAX_IMAGE_BATCH_ITEMS = 100
 _IMAGE_HOSTS = frozenset({"cdn.dummyjson.com", "images.unsplash.com"})
 _IMAGE_SIGNATURES = {
     "image/jpeg": (b"\xff\xd8\xff",),
@@ -36,6 +39,7 @@ class GeminiEmbedding:
         model: str = "gemini-embedding-2",
         dimension: int = 768,
         timeout_seconds: float = 15,
+        spend_ledger: Any | None = None,
     ):
         if not api_key:
             raise ValueError("Gemini API key is required")
@@ -45,6 +49,7 @@ class GeminiEmbedding:
         self.model = model
         self.dimension = dimension
         self.timeout_seconds = timeout_seconds
+        self.spend_ledger = spend_ledger
         self._url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
             f"{urllib.parse.quote(model, safe='')}"
@@ -58,8 +63,7 @@ class GeminiEmbedding:
                 "requests": [
                     {
                         "model": f"models/{self.model}",
-                        "content": {"parts": [{"text": value[:8000]}]},
-                        "taskType": "RETRIEVAL_DOCUMENT",
+                        "content": {"parts": [{"text": f"task: product catalog document | {value[:7960]}"}]},
                         "outputDimensionality": self.dimension,
                     }
                     for value in batch
@@ -77,8 +81,7 @@ class GeminiEmbedding:
             "embedContent",
             {
                 "model": f"models/{self.model}",
-                "content": {"parts": [{"text": text[:8000]}]},
-                "taskType": "RETRIEVAL_QUERY",
+                "content": {"parts": [{"text": f"task: product search query | {text[:7960]}"}]},
                 "outputDimensionality": self.dimension,
             },
         )
@@ -88,8 +91,45 @@ class GeminiEmbedding:
         mime_type, data = _read_catalog_image(image_url, self.timeout_seconds)
         return self.embed_image(mime_type, data)
 
+    def embed_image_urls(self, image_urls: list[str]) -> list[list[float]]:
+        results: list[list[float]] = []
+        batch: list[tuple[str, bytes]] = []
+        batch_bytes = 0
+        for url in image_urls:
+            image = _read_catalog_image(url, self.timeout_seconds)
+            if batch and (batch_bytes + len(image[1]) > MAX_IMAGE_BATCH_BYTES or len(batch) >= MAX_IMAGE_BATCH_ITEMS):
+                results.extend(self._embed_image_batch(batch))
+                batch, batch_bytes = [], 0
+            batch.append(image)
+            batch_bytes += len(image[1])
+        if batch:
+            results.extend(self._embed_image_batch(batch))
+        return results
+
+    def _embed_image_batch(self, batch: list[tuple[str, bytes]]) -> list[list[float]]:
+        response = self._post(
+            "batchEmbedContents",
+            {
+                "requests": [
+                    {
+                        "model": f"models/{self.model}",
+                        "content": {"parts": [{"inlineData": {
+                            "mimeType": mime_type,
+                            "data": base64.b64encode(data).decode("ascii"),
+                        }}]},
+                        "outputDimensionality": self.dimension,
+                    }
+                    for mime_type, data in batch
+                ]
+            },
+        )
+        embeddings = response.get("embeddings", [])
+        if len(embeddings) != len(batch):
+            raise ValueError("Gemini returned an unexpected image embedding count")
+        return [self._vector(item) for item in embeddings]
+
     def embed_image_data_url(self, image_url: str) -> list[float]:
-        mime_type, data = _decode_image_data_url(image_url)
+        mime_type, data = load_image_reference(image_url)
         return self.embed_image(mime_type, data)
 
     def embed_image(self, mime_type: str, data: bytes) -> list[float]:
@@ -110,13 +150,13 @@ class GeminiEmbedding:
                         }
                     ]
                 },
-                "taskType": "RETRIEVAL_QUERY",
                 "outputDimensionality": self.dimension,
             },
         )
         return self._vector(response.get("embedding", {}))
 
     def _post(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
+        reservation_id = self.spend_ledger.reserve_call("gemini") if self.spend_ledger is not None else None
         request = urllib.request.Request(
             f"{self._url}:{method}",
             data=json.dumps(payload, separators=(",", ":")).encode(),
@@ -131,11 +171,18 @@ class GeminiEmbedding:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                 result = json.loads(response.read())
         except urllib.error.HTTPError as exc:
+            if reservation_id and 400 <= exc.code < 500:
+                self.spend_ledger.release_call(reservation_id)
             raise RuntimeError(f"Gemini embedding returned HTTP {exc.code}") from None
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Gemini embedding failed: {type(exc).__name__}") from None
         if not isinstance(result, dict):
             raise ValueError("Gemini embedding response must be an object")
+        usage = result.get("usageMetadata")
+        if reservation_id and isinstance(usage, dict):
+            tokens = usage.get("promptTokenCount", usage.get("totalTokenCount"))
+            if isinstance(tokens, int):
+                self.spend_ledger.settle_tokens(reservation_id, input_tokens=tokens)
         return result
 
     def _vector(self, embedding: Any) -> list[float]:
@@ -155,7 +202,7 @@ class GeminiCatalogImageEmbedding:
         self.catalog_image_urls = True
 
     def embed_documents(self, image_urls: list[str]) -> list[list[float]]:
-        return [self._embeddings.embed_image_url(value.removeprefix("image:")) for value in image_urls]
+        return self._embeddings.embed_image_urls([value.removeprefix("image:") for value in image_urls])
 
     def embed_query(self, text: str) -> list[float]:
         return self._embeddings.embed_query(text)
@@ -203,6 +250,41 @@ def _decode_image_data_url(value: str) -> tuple[str, bytes]:
         raise ValueError("image data URL is invalid") from exc
     _validate_image(match.group(1), data)
     return match.group(1), data
+
+
+def load_image_reference(value: str) -> tuple[str, bytes]:
+    """Resolve an upload data URL or a private chat-upload GCS object reference."""
+    if value.startswith("data:"):
+        return _decode_image_data_url(value)
+    parsed = urllib.parse.urlparse(value)
+    bucket = os.getenv("GCS_MEDIA_BUCKET", "")
+    if parsed.scheme != "gs" or not bucket or parsed.netloc != bucket or not parsed.path.startswith("/chat-upload/"):
+        raise ValueError("image reference is not an allowed temporary upload")
+    object_name = parsed.path.lstrip("/")
+    if ".." in object_name.split("/"):
+        raise ValueError("image reference path is invalid")
+    token_request = urllib.request.Request(
+        "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+        headers={"Metadata-Flavor": "Google"},
+    )
+    try:
+        with urllib.request.urlopen(token_request, timeout=3) as response:
+            token_payload = json.loads(response.read(16 * 1024))
+        token = token_payload.get("access_token", "")
+        if not token:
+            raise ValueError("GKE workload identity token is unavailable")
+        url = ("https://storage.googleapis.com/download/storage/v1/b/" + urllib.parse.quote(bucket, safe="")
+               + "/o/" + urllib.parse.quote(object_name, safe="") + "?alt=media")
+        request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(request, timeout=8) as response:
+            data = response.read(MAX_IMAGE_BYTES + 1)
+            mime_type = response.headers.get_content_type()
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"temporary image fetch failed: {type(exc).__name__}") from None
+    if len(data) > MAX_IMAGE_BYTES:
+        raise ValueError("temporary image exceeds the 5 MiB limit")
+    _validate_image(mime_type, data)
+    return mime_type, data
 
 
 def _read_catalog_image(image_url: str, timeout: float) -> tuple[str, bytes]:

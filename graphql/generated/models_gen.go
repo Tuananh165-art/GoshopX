@@ -102,6 +102,7 @@ type CODCheckoutResponse struct {
 
 type Cart struct {
 	AccountID int         `json:"accountId"`
+	Version   string      `json:"version"`
 	ExpiresAt time.Time   `json:"expiresAt"`
 	Items     []*CartItem `json:"items"`
 }
@@ -111,6 +112,23 @@ type CartItem struct {
 	Quantity      int       `json:"quantity"`
 	ReservationID string    `json:"reservationId"`
 	ReservedUntil time.Time `json:"reservedUntil"`
+}
+
+type CartProposal struct {
+	ID          string              `json:"id"`
+	BaseVersion string              `json:"baseVersion"`
+	ExpiresAt   time.Time           `json:"expiresAt"`
+	Items       []*CartProposalItem `json:"items"`
+}
+
+type CartProposalItem struct {
+	ProductID string `json:"productId"`
+	Quantity  int    `json:"quantity"`
+}
+
+type CartProposalItemInput struct {
+	ProductID string `json:"productId"`
+	Quantity  int    `json:"quantity"`
 }
 
 type Category struct {
@@ -133,6 +151,16 @@ type CheckoutInput struct {
 type CheckoutProductInput struct {
 	ID       string `json:"id"`
 	Quantity int    `json:"quantity"`
+}
+
+type CheckoutQuote struct {
+	ID            string    `json:"id"`
+	SubtotalVnd   string    `json:"subtotalVnd"`
+	DiscountVnd   string    `json:"discountVnd"`
+	TotalPriceVnd string    `json:"totalPriceVnd"`
+	CouponCode    string    `json:"couponCode"`
+	ExpiresAt     time.Time `json:"expiresAt"`
+	CartVersion   string    `json:"cartVersion"`
 }
 
 type CreateCategoryInput struct {
@@ -172,6 +200,43 @@ type InventoryAvailability struct {
 	AvailableQuantity int    `json:"availableQuantity"`
 	ReorderLevel      int    `json:"reorderLevel"`
 	LowStock          bool   `json:"lowStock"`
+}
+
+type KnowledgeDocumentChunkPreview struct {
+	Index      int    `json:"index"`
+	Text       string `json:"text"`
+	Characters int    `json:"characters"`
+}
+
+type KnowledgeDocumentPreview struct {
+	ChunkCount                int                              `json:"chunkCount"`
+	TotalCharacters           int                              `json:"totalCharacters"`
+	EstimatedEmbeddingTokens  int                              `json:"estimatedEmbeddingTokens"`
+	EstimatedEmbeddingCostVnd int                              `json:"estimatedEmbeddingCostVnd"`
+	CostEstimateAvailable     bool                             `json:"costEstimateAvailable"`
+	Samples                   []*KnowledgeDocumentChunkPreview `json:"samples"`
+}
+
+type KnowledgeIngestionAuditEvent struct {
+	ID             string    `json:"id"`
+	ActorAccountID int       `json:"actorAccountId"`
+	Action         string    `json:"action"`
+	SourceID       string    `json:"sourceId"`
+	JobID          string    `json:"jobId"`
+	Outcome        string    `json:"outcome"`
+	OccurredAt     time.Time `json:"occurredAt"`
+}
+
+type KnowledgeIngestionJob struct {
+	ID           string    `json:"id"`
+	SourceID     string    `json:"sourceId"`
+	Name         string    `json:"name"`
+	Status       string    `json:"status"`
+	SourceStatus string    `json:"sourceStatus"`
+	Attempts     int       `json:"attempts"`
+	ErrorCode    string    `json:"errorCode"`
+	CreatedAt    time.Time `json:"createdAt"`
+	ChunkCount   int       `json:"chunkCount"`
 }
 
 type LoginInput struct {
@@ -319,17 +384,22 @@ type RecommendationChatInput struct {
 }
 
 type RecommendationChatProduct struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description"`
-	Price          float64  `json:"price"`
-	Currency       string   `json:"currency"`
-	Thumbnail      string   `json:"thumbnail"`
-	Images         []string `json:"images"`
-	Rating         float64  `json:"rating"`
-	Stock          int      `json:"stock"`
-	RetrievalScore float64  `json:"retrievalScore"`
-	MatchedReasons []string `json:"matchedReasons"`
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	Description         string   `json:"description"`
+	Price               float64  `json:"price"`
+	Currency            string   `json:"currency"`
+	Thumbnail           string   `json:"thumbnail"`
+	Images              []string `json:"images"`
+	Rating              float64  `json:"rating"`
+	Stock               int      `json:"stock"`
+	RetrievalScore      float64  `json:"retrievalScore"`
+	MatchedReasons      []string `json:"matchedReasons"`
+	Brand               string   `json:"brand"`
+	Sku                 string   `json:"sku"`
+	WarrantyInformation string   `json:"warrantyInformation"`
+	ShippingInformation string   `json:"shippingInformation"`
+	ReturnPolicy        string   `json:"returnPolicy"`
 }
 
 type RecommendationChatResponse struct {
@@ -338,6 +408,14 @@ type RecommendationChatResponse struct {
 	NextSuggestions []string                     `json:"nextSuggestions"`
 	Warnings        []string                     `json:"warnings"`
 	RequestID       string                       `json:"requestId"`
+	SessionID       string                       `json:"sessionId"`
+	Sources         []*RecommendationChatSource  `json:"sources"`
+}
+
+type RecommendationChatSource struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	PublishedAt string `json:"publishedAt"`
 }
 
 type RedirectResponse struct {

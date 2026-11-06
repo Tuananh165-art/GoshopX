@@ -22,6 +22,10 @@ message Order {
   repeated ProductInfo products = 5;
   string status = 6;
   string payment_status = 7;
+  int64 subtotal_vnd = 8;
+  int64 discount_vnd = 9;
+  int64 total_price_vnd = 10;
+  string coupon_code = 11;
 }
 
 message OrderProduct {
@@ -33,6 +37,9 @@ message PostOrderRequest {
   uint64 accountId = 1;
   repeated OrderProduct products = 3;
   bool cash_on_delivery = 4;
+  string coupon_code = 5;
+  string quote_id = 6;
+  uint64 cart_version = 7;
 }
 
 message PostOrderResponse {
@@ -51,6 +58,21 @@ message UpdateOrderStatusRequest {
 message ListOrdersRequest { string status = 1; string payment_status = 2; uint64 account_id = 3; uint64 skip = 4; uint64 take = 5; }
 message ListOrdersResponse { repeated Order orders = 1; }
 message CancelOrderRequest { uint64 order_id = 1; string reason = 2; string actor_role = 3; }
+message PreviewCheckoutRequest {
+  uint64 account_id = 1;
+  repeated OrderProduct products = 2;
+  string coupon_code = 3;
+  uint64 cart_version = 4;
+}
+message CheckoutQuote {
+  int64 subtotal_vnd = 1;
+  int64 discount_vnd = 2;
+  int64 total_price_vnd = 3;
+  string coupon_code = 4;
+  int64 expires_at_unix = 5;
+  uint64 cart_version = 6;
+  string id = 7;
+}
 
 service OrderService {
   rpc PostOrder (PostOrderRequest) returns (PostOrderResponse) {
@@ -62,4 +84,5 @@ service OrderService {
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {}
   rpc GetOrder(google.protobuf.UInt64Value) returns (PostOrderResponse) {}
   rpc CancelOrder(CancelOrderRequest) returns (PostOrderResponse) {}
+  rpc PreviewCheckout(PreviewCheckoutRequest) returns (CheckoutQuote) {}
 }

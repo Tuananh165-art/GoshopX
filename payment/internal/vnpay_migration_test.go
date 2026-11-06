@@ -2,10 +2,12 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"testing"
 	"time"
 
+	ordermodels "github.com/Tuananh165art/GoshopX/order/models"
 	"github.com/Tuananh165art/GoshopX/payment/models"
 	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
 	"github.com/Tuananh165art/GoshopX/payment/vnpay"
@@ -18,6 +20,7 @@ type vnpayMigrationRepository struct {
 	products     []*models.Product
 	transactions map[string]*models.Transaction
 	updates      int
+	registerErr  error
 }
 
 func (r *vnpayMigrationRepository) Close() {}
@@ -59,14 +62,26 @@ func (r *vnpayMigrationRepository) SaveProduct(_ context.Context, product *model
 func (r *vnpayMigrationRepository) UpdateProduct(context.Context, *models.Product) error { return nil }
 func (r *vnpayMigrationRepository) DeleteProduct(context.Context, string) error          { return nil }
 func (r *vnpayMigrationRepository) RegisterTransaction(_ context.Context, tx *models.Transaction) error {
+	if r.registerErr != nil {
+		return r.registerErr
+	}
 	if r.transactions == nil {
 		r.transactions = map[string]*models.Transaction{}
 	}
 	if _, ok := r.transactions[tx.PaymentId]; ok {
 		return gorm.ErrDuplicatedKey
 	}
+	tx.ID = uint(len(r.transactions) + 1)
 	r.transactions[tx.PaymentId] = tx
 	return nil
+}
+func (r *vnpayMigrationRepository) GetPendingTransactionByCheckoutKey(_ context.Context, key string) (*models.Transaction, error) {
+	for _, tx := range r.transactions {
+		if tx.CheckoutKey != nil && *tx.CheckoutKey == key && tx.Status == models.Pending.String() {
+			return tx, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 func (r *vnpayMigrationRepository) UpdateTransaction(_ context.Context, transaction *models.Transaction) error {
 	r.updates++
@@ -108,6 +123,68 @@ type catalogStub struct{ product *productmodels.Product }
 
 func (stub catalogStub) GetProduct(context.Context, string) (*productmodels.Product, error) {
 	return stub.product, nil
+}
+
+type orderReaderStub struct{ order *ordermodels.Order }
+
+func (stub orderReaderStub) GetOrder(context.Context, uint64) (*ordermodels.Order, error) {
+	return stub.order, nil
+}
+
+func TestVNPAYCheckoutConsumesOrderOwnedDiscountedTotal(t *testing.T) {
+	client, err := vnpay.NewClient(vnpay.Config{TmnCode: "TEST", HashSecret: "test-secret", PaymentURL: "https://example.test/pay"})
+	require.NoError(t, err)
+	repo := &vnpayMigrationRepository{products: []*models.Product{{ProductID: "p1", Price: 2_000_000, Currency: "VND"}}}
+	order := &ordermodels.Order{ID: 42, AccountID: 7, Status: "pending", SubtotalVND: 2_000_000, DiscountVND: 100_000, TotalPriceVND: 1_900_000, Products: []*ordermodels.OrderedProduct{{ID: "p1", Quantity: 1}}}
+	service := NewVNPAYPaymentServiceWithCommerce(client, repo, nil, nil, orderReaderStub{order: order})
+	checkoutURL, err := service.CreateCheckoutSession(context.Background(), 7, "https://shop.example/return", "203.0.113.10", []*pb.CheckoutCartItem{{ProductId: "p1", Quantity: 1}}, 42, nil)
+	require.NoError(t, err)
+	values, err := url.Parse(checkoutURL)
+	require.NoError(t, err)
+	require.Equal(t, "190000000", values.Query().Get("vnp_Amount"))
+	tx, err := repo.GetTransactionByPaymentID(context.Background(), values.Query().Get("vnp_TxnRef"))
+	require.NoError(t, err)
+	require.Equal(t, int64(1_900_000), tx.TotalPrice)
+}
+
+type checkoutFailureClient struct {
+	calls []vnpay.CheckoutRequest
+	fail  bool
+}
+
+func (c *checkoutFailureClient) CreateCheckoutURL(request vnpay.CheckoutRequest) (string, error) {
+	c.calls = append(c.calls, request)
+	if c.fail {
+		c.fail = false
+		return "", errors.New("temporary provider failure")
+	}
+	return "https://example.test/pay?vnp_TxnRef=" + request.TransactionRef, nil
+}
+func (*checkoutFailureClient) VerifyIPN(url.Values) (*vnpay.Callback, error) {
+	return nil, errors.New("unused")
+}
+
+func TestVNPAYCheckoutRetryReusesPendingOrderTransaction(t *testing.T) {
+	repo := &vnpayMigrationRepository{products: []*models.Product{{ProductID: "p1", Price: 100_000, Currency: "VND"}}}
+	client := &checkoutFailureClient{fail: true}
+	service := NewVNPAYPaymentService(client, repo, nil)
+	items := []*pb.CheckoutCartItem{{ProductId: "p1", Quantity: 1}}
+	_, err := service.CreateCheckoutSession(context.Background(), 7, "https://shop.example/return", "203.0.113.10", items, 42, nil)
+	require.ErrorContains(t, err, "temporary provider failure")
+	url, err := service.CreateCheckoutSession(context.Background(), 7, "https://shop.example/return", "203.0.113.10", items, 42, nil)
+	require.NoError(t, err)
+	require.Contains(t, url, client.calls[0].TransactionRef)
+	require.Equal(t, client.calls[0].TransactionRef, client.calls[1].TransactionRef)
+	require.Len(t, repo.transactions, 1)
+}
+
+func TestVNPAYCheckoutReturnsTransactionPersistenceErrorWithoutWinner(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	repo := &vnpayMigrationRepository{products: []*models.Product{{ProductID: "p1", Price: 100_000, Currency: "VND"}}, registerErr: wantErr}
+	service := NewVNPAYPaymentService(&checkoutFailureClient{}, repo, nil)
+	_, err := service.CreateCheckoutSession(context.Background(), 7, "https://shop.example/return", "203.0.113.10", []*pb.CheckoutCartItem{{ProductId: "p1", Quantity: 1}}, 42, nil)
+	require.ErrorIs(t, err, wantErr)
+	require.Empty(t, repo.transactions)
 }
 
 func TestVNPAYCheckoutRefreshesStaleMirrorFromDiscountedVNDCatalog(t *testing.T) {

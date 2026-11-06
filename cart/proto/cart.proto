@@ -15,6 +15,7 @@ message Cart {
   uint64 account_id = 1;
   repeated CartItem items = 2;
   int64 expires_at_unix = 3;
+  uint64 version = 4;
 }
 
 message GetCartRequest {
@@ -44,6 +45,33 @@ message ClearCartRequest {
 
 message PrepareCheckoutRequest {
   uint64 account_id = 1;
+  uint64 expected_version = 2;
+}
+
+message CartProposalItem {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+message CreateCartProposalRequest {
+  uint64 account_id = 1;
+  uint64 expected_version = 2;
+  string idempotency_key = 3;
+  repeated CartProposalItem items = 4;
+}
+
+message CartProposal {
+  string id = 1;
+  uint64 account_id = 2;
+  uint64 base_version = 3;
+  repeated CartProposalItem items = 4;
+  int64 expires_at_unix = 5;
+  Cart result = 6;
+}
+
+message ConfirmCartProposalRequest {
+  uint64 account_id = 1;
+  string proposal_id = 2;
 }
 
 message BooleanResponse {
@@ -57,5 +85,7 @@ service CartService {
   rpc RemoveCartItem(RemoveCartItemRequest) returns (Cart) {}
   rpc ClearCart(ClearCartRequest) returns (BooleanResponse) {}
   rpc PrepareCheckout(PrepareCheckoutRequest) returns (Cart) {}
+  rpc CreateCartProposal(CreateCartProposalRequest) returns (CartProposal) {}
+  rpc ConfirmCartProposal(ConfirmCartProposalRequest) returns (Cart) {}
   rpc CompleteCheckout(ClearCartRequest) returns (BooleanResponse) {}
 }

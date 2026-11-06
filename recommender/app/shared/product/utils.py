@@ -20,6 +20,16 @@ def normalize_product_data(product_data: dict) -> dict:
         "publishStatus": product_data.get("publishStatus", "published"),
         "moderationStatus": product_data.get("moderationStatus", "approved"),
         "stock": product_data.get("stock", 1),
+        "rating": product_data.get("rating", 0),
+        "discountPercentage": product_data.get("discountPercentage", 0),
+        "sku": product_data.get("sku", ""),
+        "warrantyInformation": product_data.get("warrantyInformation", ""),
+        "shippingInformation": product_data.get("shippingInformation", ""),
+        "returnPolicy": product_data.get("returnPolicy", ""),
+        "availabilityStatus": product_data.get("availabilityStatus", ""),
+        "weight": product_data.get("weight", 0),
+        "dimensions": product_data.get("dimensions", {}),
+        "minimumOrderQuantity": product_data.get("minimumOrderQuantity", 1),
     }
 
 

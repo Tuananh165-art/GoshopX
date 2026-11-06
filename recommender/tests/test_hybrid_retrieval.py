@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from app.retrieval.hybrid import Candidate, HybridRetriever, reciprocal_rank_fusion
 
@@ -40,6 +41,20 @@ class HybridRetrieverTests(unittest.TestCase):
         results = retriever.search(object(), limit=5, excluded_ids={"seen"})
 
         self.assertEqual([item["id"] for item in results], ["new"])
+
+    def test_applies_budget_brand_and_category_to_dense_candidates(self):
+        products = {
+            "within": {"id": "within", "publishStatus": "published", "moderationStatus": "approved", "stock": 1, "price": 900, "brand": "Acme", "category": "laptops"},
+            "over-budget": {"id": "over-budget", "publishStatus": "published", "moderationStatus": "approved", "stock": 1, "price": 1100, "brand": "Acme", "category": "laptops"},
+            "other-brand": {"id": "other-brand", "publishStatus": "published", "moderationStatus": "approved", "stock": 1, "price": 900, "brand": "Other", "category": "laptops"},
+        }
+        retriever = HybridRetriever(
+            dense_search=lambda plan: [Candidate(product_id, 1.0) for product_id in products],
+            lexical_search=lambda plan: [],
+            catalog=products,
+        )
+        plan = SimpleNamespace(category="laptops", brand="Acme", min_price=None, max_price=1000, keywords=())
+        self.assertEqual([product["id"] for product in retriever.search(plan)], ["within"])
 
 
 if __name__ == "__main__":

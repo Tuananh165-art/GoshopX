@@ -150,18 +150,18 @@ func (server *Server) GetProductMedia(ctx context.Context, objectName string) (*
 	return server.mediaStore.getProductMedia(ctx, strings.TrimPrefix(objectName, "/"))
 }
 
-func (server *Server) Mutation() generated.MutationResolver {
-	return &mutationResolver{server: server}
-}
-
-func (server *Server) Query() generated.QueryResolver {
-	return &queryResolver{server: server}
-}
-
 func (server *Server) Account() generated.AccountResolver {
 	return &accountResolver{server: server}
 }
 
 func (server *Server) Product() generated.ProductResolver {
 	return &productResolver{server: server}
+}
+
+func (server *Server) Mutation() generated.MutationResolver {
+	return &mutationResolver{server: server}
+}
+
+func (server *Server) Query() generated.QueryResolver {
+	return &queryResolver{server: server}
 }

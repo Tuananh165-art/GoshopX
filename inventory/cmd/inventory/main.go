@@ -72,6 +72,7 @@ type dummyJSONInventoryResponse struct {
 		ID    int `json:"id"`
 		Stock int `json:"stock"`
 	} `json:"products"`
+	Total int `json:"total"`
 }
 
 func seedInventory(ctx context.Context, service internal.Service) error {
@@ -91,8 +92,19 @@ func seedInventory(ctx context.Context, service internal.Service) error {
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
 		return err
 	}
+	if payload.Total <= 0 || len(payload.Products) != payload.Total {
+		return fmt.Errorf("dummyjson inventory snapshot incomplete: received %d of %d", len(payload.Products), payload.Total)
+	}
+	seen := make(map[int]struct{}, len(payload.Products))
 	for _, product := range payload.Products {
-		if _, _, err := service.UpsertStock(ctx, strconv.Itoa(product.ID), int32(product.Stock), 0); err != nil {
+		if product.ID <= 0 || product.Stock < 0 {
+			return fmt.Errorf("dummyjson returned invalid inventory for product %d", product.ID)
+		}
+		if _, ok := seen[product.ID]; ok {
+			return fmt.Errorf("dummyjson returned duplicate inventory product id %d", product.ID)
+		}
+		seen[product.ID] = struct{}{}
+		if _, _, err := service.InitializeStock(ctx, strconv.Itoa(product.ID), int32(product.Stock), 0); err != nil {
 			return err
 		}
 	}

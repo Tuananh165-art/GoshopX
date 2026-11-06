@@ -74,7 +74,7 @@ Editable source: [HTML/SVG diagram](./docs/diagrams/gcp-lab-architecture.html), 
 
 ## AI Product Assistant
 
-The recommender contains LangGraph Discovery, Recommendation, Cart-advice and Multimodal paths using catalog-grounded hybrid retrieval. Image results come from catalog thumbnails; input images are validated and stripped from persisted browser history. The cart path is advisory and the backend remains authoritative. See [AI RAG status and provider configuration](./docs/chatbot-agentic-rag.md); Tavily/Jev/LangSmith and server-side cart action proposals are not wired yet.
+The recommender contains LangGraph Discovery, Recommendation, Cart-advice and Multimodal paths using catalog-grounded BM25+dense retrieval with RRF, bounded catalog tools, and PostgreSQL conversation memory with compacted older context. Image results come from catalog thumbnails; input images are validated and stripped from persisted browser history. Tavily is bounded to supplemental general knowledge, Jev reranking is optional, LangSmith emits redacted metadata only, and the spend ledger reserves estimated provider costs. Users can review and confirm a versioned, expiring cart proposal. Order provides a non-consuming integer-VND coupon quote with expiry/cart-version, then rechecks product prices and coupon eligibility atomically when creating the order; Payment checks the saved order against current catalog prices before charging. Quote persistence, coupon administration, durable proposal resume, provider invoice reconciliation, and live GKE/provider acceptance remain open. See [AI RAG status and provider configuration](./docs/chatbot-agentic-rag.md) and the [provider-to-GKE runbook](./docs/chatbot-provider-gke-runbook.md).
 
 ## Load Testing
 

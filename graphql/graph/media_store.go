@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -21,6 +22,16 @@ import (
 )
 
 const maxProductMediaBytes = 10 << 20
+const maxKnowledgeDocumentBytes = 20 << 20
+
+func isSupportedKnowledgeDocument(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".pdf", ".docx", ".txt", ".md", ".json", ".csv":
+		return true
+	default:
+		return false
+	}
+}
 
 type mediaStore struct {
 	client    *minio.Client
@@ -94,6 +105,89 @@ func (s *mediaStore) uploadProductMedia(ctx context.Context, productID string, u
 		return objectName, checksum, nil
 	}
 	return fmt.Sprintf("%s/%s/%s", s.publicURL, s.bucket, objectName), checksum, nil
+}
+
+func (s *mediaStore) storeChatImage(ctx context.Context, dataURL string) (string, error) {
+	if s == nil || s.gcs == nil {
+		return "", errors.New("temporary chat image storage is unavailable")
+	}
+	metadata, encoded, ok := strings.Cut(dataURL, ",")
+	if !ok {
+		return "", errors.New("chat image payload is invalid")
+	}
+	contentType := strings.TrimPrefix(strings.TrimSuffix(metadata, ";base64"), "data:")
+	extension := map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[contentType]
+	if extension == "" {
+		return "", errors.New("chat image type is unsupported")
+	}
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(data) == 0 || len(data) > maxChatImageBytes {
+		return "", errors.New("chat image payload is invalid or exceeds 5 MiB")
+	}
+	if _, detectedType, err := validateProductMedia(bytes.NewReader(data), extension); err != nil || detectedType != contentType {
+		return "", errors.New("chat image bytes do not match the declared image type")
+	}
+	objectName := fmt.Sprintf("chat-upload/%s%s", uuid.NewString(), extension)
+	_, err = s.gcs.Objects.Insert(s.bucket, &gcstorage.Object{Name: objectName, ContentType: contentType}).Media(bytes.NewReader(data)).Context(ctx).Do()
+	if err != nil {
+		return "", err
+	}
+	return "gs://" + s.bucket + "/" + objectName, nil
+}
+
+func (s *mediaStore) uploadKnowledgeDocument(ctx context.Context, upload graphql.Upload) (string, string, string, error) {
+	if s == nil || s.gcs == nil {
+		return "", "", "", errors.New("private GCS document storage is not configured")
+	}
+	if upload.File == nil || upload.Size <= 0 || upload.Size > maxKnowledgeDocumentBytes {
+		return "", "", "", errors.New("document must be between 1 byte and 20 MiB")
+	}
+	ext := strings.ToLower(filepath.Ext(upload.Filename))
+	allowedTypes := map[string]map[string]bool{
+		".pdf": {"application/pdf": true}, ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true},
+		".txt": {"text/plain": true}, ".md": {"text/markdown": true, "text/plain": true},
+		".json": {"application/json": true, "text/json": true}, ".csv": {"text/csv": true, "application/csv": true, "text/plain": true},
+	}
+	if !allowedTypes[ext][strings.ToLower(strings.TrimSpace(strings.Split(upload.ContentType, ";")[0]))] {
+		return "", "", "", errors.New("unsupported document type or content type")
+	}
+	data, err := io.ReadAll(io.LimitReader(upload.File, maxKnowledgeDocumentBytes+1))
+	if err != nil || len(data) != int(upload.Size) || len(data) > maxKnowledgeDocumentBytes {
+		return "", "", "", errors.New("document size does not match its payload")
+	}
+	if err := validateKnowledgeDocumentBytes(ext, data); err != nil {
+		return "", "", "", err
+	}
+	hash := sha256.Sum256(data)
+	objectName := fmt.Sprintf("knowledge-upload/%s%s", uuid.NewString(), ext)
+	if _, err := s.gcs.Objects.Insert(s.bucket, &gcstorage.Object{Name: objectName, ContentType: strings.Split(upload.ContentType, ";")[0]}).Media(bytes.NewReader(data)).Context(ctx).Do(); err != nil {
+		return "", "", "", err
+	}
+	return "gs://" + s.bucket + "/" + objectName, hex.EncodeToString(hash[:]), filepath.Base(upload.Filename), nil
+}
+
+func (s *mediaStore) deleteKnowledgeUpload(ctx context.Context, uri string) {
+	if s == nil || s.gcs == nil || !strings.HasPrefix(uri, "gs://"+s.bucket+"/knowledge-upload/") {
+		return
+	}
+	objectName := strings.TrimPrefix(uri, "gs://"+s.bucket+"/")
+	_ = s.gcs.Objects.Delete(s.bucket, objectName).Context(ctx).Do()
+}
+
+func validateKnowledgeDocumentBytes(ext string, data []byte) error {
+	valid := false
+	switch ext {
+	case ".pdf":
+		valid = bytes.HasPrefix(data, []byte("%PDF-"))
+	case ".docx":
+		valid = len(data) >= 4 && bytes.Equal(data[:2], []byte{'P', 'K'})
+	case ".txt", ".md", ".json", ".csv":
+		valid = !bytes.Contains(data, []byte{0}) && strings.ToValidUTF8(string(data), "") == string(data)
+	}
+	if !valid {
+		return errors.New("document bytes do not match the declared format")
+	}
+	return nil
 }
 
 func validateProductMedia(reader io.Reader, ext string) (io.Reader, string, error) {

@@ -29,6 +29,8 @@ func TestDummyJSONProductModelPreservesCatalogFields(t *testing.T) {
 	assert.Equal(t, "ACM-1", product.SKU)
 	assert.Equal(t, "published", product.PublishStatus)
 	assert.Equal(t, "approved", product.ModerationStatus)
+	assert.Equal(t, "dummyjson", product.SourceSystem)
+	assert.Equal(t, "1", product.SourceID)
 	assert.Len(t, product.Media, 2)
 }
 
@@ -48,7 +50,7 @@ func TestDummyJSONClientListAndSeed(t *testing.T) {
 	repository := new(MockRepository)
 	repository.On("PutProductWithID", mock.Anything, mock.MatchedBy(func(product any) bool {
 		item := product.(*models.Product)
-		return item.ID == "1" && item.Price == 250000
+		return item.ID == "1" && item.Price == 250000 && item.SourceSystem == "dummyjson" && item.SourceID == "1" && item.ImportSnapshotID != ""
 	})).Return(nil).Once()
 	repository.On("PutCategory", mock.Anything, mock.MatchedBy(func(category any) bool {
 		item := category.(*models.Category)
@@ -58,4 +60,34 @@ func TestDummyJSONClientListAndSeed(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, seeded)
 	repository.AssertExpectations(t)
+}
+
+func TestDummyJSONSeedRejectsDuplicateAndIncompleteSnapshots(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"duplicate ids", `{"products":[{"id":1,"title":"A"},{"id":1,"title":"B"}],"total":2,"skip":0,"limit":100}`, "duplicate product id 1"},
+		{"incomplete total", `{"products":[{"id":1,"title":"A"}],"total":2,"skip":0,"limit":100}`, "snapshot incomplete"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if tt.name == "incomplete total" && r.URL.Query().Get("skip") == "1" {
+					_, _ = w.Write([]byte(`{"products":[],"total":2,"skip":1,"limit":100}`))
+					return
+				}
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			repository := new(MockRepository)
+			repository.On("PutProductWithID", mock.Anything, mock.Anything).Return(nil).Once()
+			_, err := internal.NewDummyJSONClient(server.URL, server.Client()).Seed(context.Background(), repository, 0)
+			assert.ErrorContains(t, err, tt.want)
+			repository.AssertExpectations(t)
+		})
+	}
 }

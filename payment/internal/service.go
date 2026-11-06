@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/IBM/sarama"
+	ordermodels "github.com/Tuananh165art/GoshopX/order/models"
 	"github.com/Tuananh165art/GoshopX/payment/models"
 	"github.com/Tuananh165art/GoshopX/payment/proto/pb"
 	"github.com/Tuananh165art/GoshopX/payment/vnpay"
@@ -26,6 +27,9 @@ type VNPAYClient interface {
 }
 type ProductCatalog interface {
 	GetProduct(context.Context, string) (*productmodels.Product, error)
+}
+type OrderReader interface {
+	GetOrder(context.Context, uint64) (*ordermodels.Order, error)
 }
 type Service interface {
 	RegisterProduct(context.Context, string, int64, string, string) error
@@ -45,6 +49,7 @@ type paymentService struct {
 	paymentRepository Repository
 	producer          sarama.AsyncProducer
 	catalog           ProductCatalog
+	orders            OrderReader
 }
 
 func NewVNPAYPaymentService(client VNPAYClient, repo Repository, producer sarama.AsyncProducer) Service {
@@ -53,6 +58,10 @@ func NewVNPAYPaymentService(client VNPAYClient, repo Repository, producer sarama
 
 func NewVNPAYPaymentServiceWithCatalog(client VNPAYClient, repo Repository, producer sarama.AsyncProducer, catalog ProductCatalog) Service {
 	return &paymentService{client: client, paymentRepository: repo, producer: producer, catalog: catalog}
+}
+
+func NewVNPAYPaymentServiceWithCommerce(client VNPAYClient, repo Repository, producer sarama.AsyncProducer, catalog ProductCatalog, orders OrderReader) Service {
+	return &paymentService{client: client, paymentRepository: repo, producer: producer, catalog: catalog, orders: orders}
 }
 func (d *paymentService) GetProducer() sarama.AsyncProducer { return d.producer }
 func (d *paymentService) RegisterProduct(ctx context.Context, _ string, price int64, _ string, id string) error {
@@ -112,25 +121,93 @@ func (d *paymentService) CreateCheckoutSession(ctx context.Context, user uint64,
 	if len(products) != len(ids) {
 		return "", errors.New("checkout contains unknown products")
 	}
-	var total int64
+	var catalogSubtotal int64
 	for _, p := range products {
 		if p.Currency != "VND" || p.Price <= 0 || quantities[p.ProductID] > uint64(math.MaxInt64/p.Price) {
 			return "", errors.New("invalid local product price")
 		}
-		total += p.Price * int64(quantities[p.ProductID])
-		if total < 0 {
+		catalogSubtotal += p.Price * int64(quantities[p.ProductID])
+		if catalogSubtotal < 0 {
 			return "", errors.New("checkout total overflow")
 		}
 	}
-	ref, err := newTransactionRef()
-	if err != nil {
-		return "", err
+	total := catalogSubtotal
+	if d.orders != nil {
+		if order == 0 {
+			return "", errors.New("checkout requires an order")
+		}
+		authoritative, err := d.orders.GetOrder(ctx, order)
+		if err != nil {
+			return "", err
+		}
+		if authoritative == nil || authoritative.ID != uint(order) || authoritative.AccountID != user || authoritative.Status != "pending" {
+			return "", errors.New("order is not eligible for checkout")
+		}
+		if !sameOrderItems(authoritative.Products, quantities) {
+			return "", errors.New("checkout products do not match order")
+		}
+		if authoritative.TotalPriceVND > 0 {
+			if authoritative.SubtotalVND != catalogSubtotal || authoritative.DiscountVND < 0 || authoritative.DiscountVND > catalogSubtotal || authoritative.TotalPriceVND != catalogSubtotal-authoritative.DiscountVND {
+				return "", errors.New("order quote no longer matches catalog prices")
+			}
+			total = authoritative.TotalPriceVND
+		}
 	}
-	tx := &models.Transaction{OrderId: order, UserId: user, PaymentId: ref, TotalPrice: total, Currency: "VND", Status: models.Pending.String(), ReservationIDs: strings.Join(reservations, ",")}
-	if err = d.paymentRepository.RegisterTransaction(ctx, tx); err != nil {
-		return "", err
+	var tx *models.Transaction
+	if order > 0 {
+		key := fmt.Sprintf("order:%d", order)
+		tx, err = d.paymentRepository.GetPendingTransactionByCheckoutKey(ctx, key)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", err
+		}
+		if tx != nil && tx.ID != 0 {
+			if tx.UserId != user || tx.TotalPrice != total || tx.OrderId != order {
+				return "", errors.New("pending checkout no longer matches the order")
+			}
+		}
 	}
-	return d.client.CreateCheckoutURL(vnpay.CheckoutRequest{TransactionRef: ref, AmountVND: total, OrderInfo: fmt.Sprintf("Thanh toan don hang %d", order), ReturnURL: redirect, ClientIP: clientIP})
+	if tx == nil || tx.ID == 0 {
+		ref, refErr := newTransactionRef()
+		if refErr != nil {
+			return "", refErr
+		}
+		tx = &models.Transaction{OrderId: order, UserId: user, PaymentId: ref, TotalPrice: total, Currency: "VND", Status: models.Pending.String(), ReservationIDs: strings.Join(reservations, ",")}
+		if order > 0 {
+			key := fmt.Sprintf("order:%d", order)
+			tx.CheckoutKey = &key
+		}
+		if err = d.paymentRepository.RegisterTransaction(ctx, tx); err != nil {
+			// Concurrent retries may race to create the same order session. Reuse the winner.
+			if tx.CheckoutKey == nil {
+				return "", err
+			}
+			key := *tx.CheckoutKey
+			winner, lookupErr := d.paymentRepository.GetPendingTransactionByCheckoutKey(ctx, key)
+			if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return "", err
+			}
+			if lookupErr != nil {
+				return "", errors.Join(err, lookupErr)
+			}
+			if winner == nil || winner.UserId != user || winner.TotalPrice != total || winner.OrderId != order {
+				return "", errors.New("could not safely recover pending checkout")
+			}
+			tx = winner
+		}
+	}
+	return d.client.CreateCheckoutURL(vnpay.CheckoutRequest{TransactionRef: tx.PaymentId, AmountVND: total, OrderInfo: fmt.Sprintf("Thanh toan don hang %d", order), ReturnURL: redirect, ClientIP: clientIP})
+}
+
+func sameOrderItems(items []*ordermodels.OrderedProduct, quantities map[string]uint64) bool {
+	if len(items) != len(quantities) {
+		return false
+	}
+	for _, item := range items {
+		if item == nil || quantities[item.ID] != uint64(item.Quantity) {
+			return false
+		}
+	}
+	return true
 }
 func (d *paymentService) productsForCheckout(ctx context.Context, ids []string) ([]*models.Product, error) {
 	products, err := d.paymentRepository.GetProductsByIDs(ctx, ids)
@@ -216,6 +293,7 @@ func (d *paymentService) HandleVNPAYIPN(ctx context.Context, values url.Values) 
 	}
 	tx.Status = status.String()
 	tx.SettledPrice = callback.AmountVND
+	tx.CheckoutKey = nil
 	if err := d.paymentRepository.UpdateTransaction(ctx, tx); err != nil {
 		return tx, false, "99"
 	}

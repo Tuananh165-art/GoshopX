@@ -2,7 +2,12 @@ package internal
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"log"
+	"math"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -11,9 +16,13 @@ import (
 	inventorymodels "github.com/Tuananh165art/GoshopX/inventory/models"
 	sharedevents "github.com/Tuananh165art/GoshopX/pkg/events"
 	"github.com/Tuananh165art/GoshopX/pkg/kafka"
+	"github.com/google/uuid"
 )
 
 var ErrInvalidCartQuantity = errors.New("invalid cart quantity")
+var ErrCartVersionConflict = errors.New("cart changed; refresh and review the proposal")
+var ErrCartProposalExpired = errors.New("cart proposal expired")
+var ErrCartProposalMismatch = errors.New("idempotency key was already used for another proposal")
 
 type InventoryClient interface {
 	ReserveStock(ctx context.Context, reservationID string, accountID uint64, productID string, quantity int32, ttl time.Duration, source string) (*inventorymodels.StockReservation, *inventorymodels.Availability, error)
@@ -28,6 +37,9 @@ type Service interface {
 	ClearCart(ctx context.Context, accountID uint64) error
 	CompleteCheckout(ctx context.Context, accountID uint64) error
 	PrepareCheckout(ctx context.Context, accountID uint64) (*models.Cart, error)
+	PrepareCheckoutAtVersion(ctx context.Context, accountID, expectedVersion uint64) (*models.Cart, error)
+	CreateCartProposal(ctx context.Context, accountID, expectedVersion uint64, idempotencyKey string, items []models.ProposalItem) (*models.CartProposal, error)
+	ConfirmCartProposal(ctx context.Context, accountID uint64, proposalID string) (*models.Cart, error)
 	GetProducer() sarama.AsyncProducer
 }
 
@@ -37,6 +49,10 @@ type cartService struct {
 	producer        sarama.AsyncProducer
 	ttl             time.Duration
 }
+
+const cartMutationLockTTL = 2 * time.Minute
+const cartProposalTTL = 10 * time.Minute
+const maxCartProposalItems = 20
 
 func NewCartService(repository Repository, inventoryClient InventoryClient, producer sarama.AsyncProducer) Service {
 	return &cartService{
@@ -71,6 +87,12 @@ func (service *cartService) AddCartItem(ctx context.Context, accountID uint64, p
 }
 
 func (service *cartService) upsertCartItem(ctx context.Context, accountID uint64, productID string, quantity int32, increment bool) (*models.Cart, error) {
+	unlock, err := service.lockCart(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
 	if quantity <= 0 {
 		return nil, ErrInvalidCartQuantity
 	}
@@ -79,13 +101,18 @@ func (service *cartService) upsertCartItem(ctx context.Context, accountID uint64
 	if err != nil {
 		return nil, err
 	}
+	if err := incrementCartVersion(cart); err != nil {
+		return nil, err
+	}
 
 	itemIndex := findItem(cart.Items, productID)
 	if increment && itemIndex >= 0 {
 		quantity += cart.Items[itemIndex].Quantity
 	}
 	reservationID := ""
+	var previousItem models.CartItem
 	if itemIndex >= 0 {
+		previousItem = cart.Items[itemIndex]
 		reservationID = cart.Items[itemIndex].ReservationID
 	}
 
@@ -109,6 +136,18 @@ func (service *cartService) upsertCartItem(ctx context.Context, accountID uint64
 
 	cart.ExpiresAt = reservation.ExpiresAt
 	if err := service.repository.SaveCart(ctx, cart, service.ttl); err != nil {
+		// Restore the prior reservation quantity if persistence fails after Inventory accepted it.
+		compensationCtx, cancelCompensation := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancelCompensation()
+		var compensationErr error
+		if itemIndex >= 0 {
+			_, _, compensationErr = service.inventoryClient.ReserveStock(compensationCtx, previousItem.ReservationID, accountID, productID, previousItem.Quantity, service.ttl, "cart")
+		} else {
+			_, _, compensationErr = service.inventoryClient.ReleaseReservation(compensationCtx, reservation.ReservationID)
+		}
+		if compensationErr != nil {
+			log.Printf("cart reservation compensation failed for account %d product %s: %v", accountID, productID, compensationErr)
+		}
 		return nil, err
 	}
 
@@ -124,6 +163,12 @@ func (service *cartService) upsertCartItem(ctx context.Context, accountID uint64
 }
 
 func (service *cartService) RemoveCartItem(ctx context.Context, accountID uint64, productID string) (*models.Cart, error) {
+	unlock, err := service.lockCart(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
 	cart, err := service.GetCart(ctx, accountID)
 	if err != nil {
 		return nil, err
@@ -135,21 +180,17 @@ func (service *cartService) RemoveCartItem(ctx context.Context, accountID uint64
 	}
 
 	item := cart.Items[itemIndex]
+	cart.Items = append(cart.Items[:itemIndex], cart.Items[itemIndex+1:]...)
+	if err := incrementCartVersion(cart); err != nil {
+		return nil, err
+	}
+	cart.ExpiresAt = time.Now().UTC().Add(service.ttl)
+	if err := service.repository.SaveCart(ctx, cart, service.ttl); err != nil {
+		return nil, err
+	}
 	if item.ReservationID != "" {
 		if _, _, err := service.inventoryClient.ReleaseReservation(ctx, item.ReservationID); err != nil {
-			return nil, err
-		}
-	}
-
-	cart.Items = append(cart.Items[:itemIndex], cart.Items[itemIndex+1:]...)
-	if len(cart.Items) == 0 {
-		if err := service.repository.DeleteCart(ctx, accountID); err != nil {
-			return nil, err
-		}
-	} else {
-		cart.ExpiresAt = time.Now().UTC().Add(service.ttl)
-		if err := service.repository.SaveCart(ctx, cart, service.ttl); err != nil {
-			return nil, err
+			log.Printf("cart reservation release deferred for account %d product %s: %v", accountID, productID, err)
 		}
 	}
 
@@ -165,6 +206,12 @@ func (service *cartService) RemoveCartItem(ctx context.Context, accountID uint64
 }
 
 func (service *cartService) ClearCart(ctx context.Context, accountID uint64) error {
+	unlock, err := service.lockCart(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	cart, err := service.GetCart(ctx, accountID)
 	if err != nil {
 		if errors.Is(err, ErrCartNotFound) {
@@ -179,13 +226,20 @@ func (service *cartService) ClearCart(ctx context.Context, accountID uint64) err
 			continue
 		}
 		reservationIDs = append(reservationIDs, item.ReservationID)
-		if _, _, err := service.inventoryClient.ReleaseReservation(ctx, item.ReservationID); err != nil {
-			return err
-		}
 	}
 
-	if err := service.repository.DeleteCart(ctx, accountID); err != nil {
+	if err := incrementCartVersion(cart); err != nil {
 		return err
+	}
+	cart.Items = []models.CartItem{}
+	cart.ExpiresAt = time.Now().UTC().Add(service.ttl)
+	if err := service.repository.SaveCart(ctx, cart, service.ttl); err != nil {
+		return err
+	}
+	for _, reservationID := range reservationIDs {
+		if _, _, err := service.inventoryClient.ReleaseReservation(ctx, reservationID); err != nil {
+			log.Printf("cart reservation release deferred for account %d reservation %s: %v", accountID, reservationID, err)
+		}
 	}
 
 	service.publishEvent(accountID, "cart.cleared", models.EventData{
@@ -197,20 +251,61 @@ func (service *cartService) ClearCart(ctx context.Context, accountID uint64) err
 }
 
 func (service *cartService) CompleteCheckout(ctx context.Context, accountID uint64) error {
-	if _, err := service.GetCart(ctx, accountID); err != nil {
+	unlock, err := service.lockCart(ctx, accountID)
+	if err != nil {
 		return err
 	}
-	if err := service.repository.DeleteCart(ctx, accountID); err != nil {
+	defer unlock()
+
+	cart, err := service.GetCart(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if err := incrementCartVersion(cart); err != nil {
+		return err
+	}
+	cart.Items = []models.CartItem{}
+	cart.ExpiresAt = time.Now().UTC().Add(service.ttl)
+	if err := service.repository.SaveCart(ctx, cart, service.ttl); err != nil {
 		return err
 	}
 	service.publishEvent(accountID, "cart.checkout_completed", models.EventData{CartSize: 0, Action: "completed"})
 	return nil
 }
 
+func (service *cartService) lockCart(ctx context.Context, accountID uint64) (func(), error) {
+	var bytes [16]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return nil, err
+	}
+	token := hex.EncodeToString(bytes[:])
+	// shortcut: the lease is fixed because Cart operations are bounded by the GraphQL deadlines; add lease renewal if that changes.
+	locked, err := service.repository.AcquireCartLock(ctx, accountID, token, cartMutationLockTTL)
+	if err != nil {
+		return nil, err
+	}
+	if !locked {
+		return nil, ErrCartLocked
+	}
+	return func() { _ = service.repository.ReleaseCartLock(context.Background(), accountID, token) }, nil
+}
+
 func (service *cartService) PrepareCheckout(ctx context.Context, accountID uint64) (*models.Cart, error) {
+	return service.PrepareCheckoutAtVersion(ctx, accountID, 0)
+}
+
+func (service *cartService) PrepareCheckoutAtVersion(ctx context.Context, accountID, expectedVersion uint64) (*models.Cart, error) {
+	unlock, err := service.lockCart(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	cart, err := service.GetCart(ctx, accountID)
 	if err != nil {
 		return nil, err
+	}
+	if expectedVersion != 0 && cart.Version != expectedVersion {
+		return nil, ErrCartVersionConflict
 	}
 
 	filtered := service.filterExpired(cart)
@@ -226,10 +321,162 @@ func (service *cartService) PrepareCheckout(ctx context.Context, accountID uint6
 	return filtered, nil
 }
 
+func (service *cartService) CreateCartProposal(ctx context.Context, accountID, expectedVersion uint64, idempotencyKey string, items []models.ProposalItem) (*models.CartProposal, error) {
+	if accountID == 0 || len(idempotencyKey) == 0 || len(idempotencyKey) > 128 || len(items) == 0 || len(items) > maxCartProposalItems {
+		return nil, ErrInvalidCartQuantity
+	}
+	copyItems := append([]models.ProposalItem(nil), items...)
+	seen := make(map[string]struct{}, len(copyItems))
+	for _, item := range copyItems {
+		if item.ProductID == "" || len(item.ProductID) > 128 || item.Quantity <= 0 || item.Quantity > 100 {
+			return nil, ErrInvalidCartQuantity
+		}
+		if _, exists := seen[item.ProductID]; exists {
+			return nil, ErrInvalidCartQuantity
+		}
+		seen[item.ProductID] = struct{}{}
+	}
+	unlock, err := service.lockCart(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	if existing, err := service.repository.GetCartProposal(ctx, accountID, idempotencyKey); err == nil {
+		if existing.BaseVersion != expectedVersion || !sameProposalItems(existing.Items, copyItems) {
+			return nil, ErrCartProposalMismatch
+		}
+		return existing, nil
+	} else if !errors.Is(err, ErrCartNotFound) {
+		return nil, err
+	}
+
+	cart, err := service.GetCart(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if cart.Version != expectedVersion {
+		return nil, ErrCartVersionConflict
+	}
+	proposal := &models.CartProposal{
+		ID: uuid.NewString(), IdempotencyKey: idempotencyKey, AccountID: accountID,
+		BaseVersion: expectedVersion, Items: copyItems, ExpiresAt: time.Now().UTC().Add(cartProposalTTL),
+	}
+	if err := service.repository.SaveCartProposal(ctx, proposal, cartProposalTTL); err != nil {
+		return nil, err
+	}
+	return proposal, nil
+}
+
+func (service *cartService) ConfirmCartProposal(ctx context.Context, accountID uint64, proposalID string) (*models.Cart, error) {
+	proposal, err := service.repository.GetCartProposalByID(ctx, accountID, proposalID)
+	if err != nil {
+		return nil, err
+	}
+	if proposal.AccountID != accountID || proposal.ID != proposalID {
+		return nil, ErrCartNotFound
+	}
+	if proposal.Result != nil {
+		return proposal.Result, nil
+	}
+	if !proposal.ExpiresAt.After(time.Now().UTC()) {
+		return nil, ErrCartProposalExpired
+	}
+	unlock, err := service.lockCart(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
+	current, err := service.GetCart(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if current.Version != proposal.BaseVersion {
+		return nil, ErrCartVersionConflict
+	}
+	if err := incrementCartVersion(current); err != nil {
+		return nil, err
+	}
+	type reservationChange struct {
+		id               string
+		productID        string
+		previousQuantity int32
+	}
+	changes := make([]reservationChange, 0, len(proposal.Items))
+	rollback := func() {
+		compensationCtx, cancelCompensation := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancelCompensation()
+		for i := len(changes) - 1; i >= 0; i-- {
+			change := changes[i]
+			if change.previousQuantity > 0 {
+				_, _, _ = service.inventoryClient.ReserveStock(compensationCtx, change.id, accountID, change.productID, change.previousQuantity, service.ttl, "cart")
+			} else {
+				_, _, _ = service.inventoryClient.ReleaseReservation(compensationCtx, change.id)
+			}
+		}
+	}
+	result := &models.Cart{AccountID: accountID, Version: current.Version, Items: append([]models.CartItem(nil), current.Items...), ExpiresAt: time.Now().UTC().Add(service.ttl)}
+	for _, item := range proposal.Items {
+		index := findItem(result.Items, item.ProductID)
+		reservationID := proposalReservationID(proposal.ID, item.ProductID)
+		quantity := item.Quantity
+		previousQuantity := int32(0)
+		if index >= 0 {
+			previous := result.Items[index]
+			if previous.Quantity > 100-item.Quantity {
+				rollback()
+				return nil, ErrInvalidCartQuantity
+			}
+			quantity += previous.Quantity
+			reservationID = previous.ReservationID
+			if previous.ReservationID != "" {
+				previousQuantity = previous.Quantity
+			}
+		}
+		reservation, _, reserveErr := service.inventoryClient.ReserveStock(ctx, reservationID, accountID, item.ProductID, quantity, service.ttl, "cart")
+		if reserveErr != nil {
+			rollback()
+			return nil, reserveErr
+		}
+		changes = append(changes, reservationChange{id: reservation.ReservationID, productID: item.ProductID, previousQuantity: previousQuantity})
+		updated := models.CartItem{ProductID: item.ProductID, Quantity: quantity, ReservationID: reservation.ReservationID, ReservedUntil: reservation.ExpiresAt}
+		if index >= 0 {
+			result.Items[index] = updated
+		} else {
+			result.Items = append(result.Items, updated)
+		}
+	}
+	proposal.Result = result
+	if err := service.repository.SaveCartAndProposal(ctx, result, proposal, service.ttl); err != nil {
+		rollback()
+		return nil, err
+	}
+	service.publishEvent(accountID, "cart.proposal_confirmed", models.EventData{ReservationIDs: reservationIDs(result.Items), CartSize: len(result.Items), Action: "proposal_confirmed"})
+	return result, nil
+}
+
+func sameProposalItems(left, right []models.ProposalItem) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func proposalReservationID(proposalID, productID string) string {
+	digest := sha256.Sum256([]byte(proposalID + ":" + productID))
+	return "cart-proposal-" + hex.EncodeToString(digest[:])
+}
+
 func (service *cartService) filterExpired(cart *models.Cart) *models.Cart {
 	now := time.Now().UTC()
 	filtered := &models.Cart{
 		AccountID: cart.AccountID,
+		Version:   cart.Version,
 		Items:     make([]models.CartItem, 0, len(cart.Items)),
 		ExpiresAt: cart.ExpiresAt,
 	}
@@ -239,6 +486,14 @@ func (service *cartService) filterExpired(cart *models.Cart) *models.Cart {
 		}
 	}
 	return filtered
+}
+
+func incrementCartVersion(cart *models.Cart) error {
+	if cart.Version == math.MaxUint64 {
+		return errors.New("cart version exhausted")
+	}
+	cart.Version++
+	return nil
 }
 
 func (service *cartService) publishEvent(accountID uint64, eventType string, data models.EventData) {

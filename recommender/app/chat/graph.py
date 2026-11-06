@@ -13,9 +13,10 @@ class ChatGraphState(TypedDict, total=False):
     decision: GuardrailDecision
     response: Any
     agent: str
+    history: list[dict[str, Any]]
 
 
-def build_chat_graph(service: Any):
+def build_chat_graph(service: Any, checkpointer: Any | None = None):
     """Build the LangGraph workflow around the LLM+RAG service core.
 
     Four specialist routes share one bounded, catalog-grounded RAG executor.
@@ -35,23 +36,24 @@ def build_chat_graph(service: Any):
         return {"response": service._refusal_response(state["decision"])}
 
     def choose_agent(state: ChatGraphState) -> str:
-        request = state["request"]
-        if request.image_url:
-            return "multimodal"
-        text = str(request.text or "").casefold()
-        if any(term in text for term in ("compare", "versus", " vs ", "so sánh", "khác nhau")):
-            return "recommendation"
-        if any(term in text for term in ("cart", "checkout", "giỏ hàng", "mua kèm", "phụ kiện", "coupon", "mã giảm")):
-            return "cart"
-        return "discovery"
+        return service.choose_agent(state["request"], state.get("history", []))
+
+    def selected_agent(state: ChatGraphState) -> str:
+        return state["agent"]
 
     def respond(state: ChatGraphState, agent: str) -> ChatGraphState:
-        return {"response": service._reply_direct(
+        response = service._reply_direct(
             state["request"],
             authenticated=state.get("authenticated", False),
             skip_guardrail=True,
             agent=agent,
-        )}
+            history=state.get("history", []),
+        )
+        history = [*state.get("history", []),
+                   {"role": "user", "content": str(state["request"].text or "[product image]")[:1000]},
+                   {"role": "assistant", "content": response.answer[:2000],
+                    "product_ids": [str(product.get("id")) for product in response.products if product.get("id")] }]
+        return {"response": response, "history": history[-16:], "agent": agent}
 
     graph = StateGraph(ChatGraphState)
     graph.add_node("guard", guard)
@@ -61,8 +63,8 @@ def build_chat_graph(service: Any):
     graph.add_node("refuse", refuse)
     graph.add_edge(START, "guard")
     graph.add_conditional_edges("guard", route, {"respond": "route_agent", "refuse": "refuse"})
-    graph.add_conditional_edges("route_agent", choose_agent, {name: name for name in ("discovery", "recommendation", "cart", "multimodal")})
+    graph.add_conditional_edges("route_agent", selected_agent, {name: name for name in ("discovery", "recommendation", "cart", "multimodal")})
     for agent_name in ("discovery", "recommendation", "cart", "multimodal"):
         graph.add_edge(agent_name, END)
     graph.add_edge("refuse", END)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)

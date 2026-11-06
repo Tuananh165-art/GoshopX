@@ -20,6 +20,7 @@ class LangChainMilvusIndexes:
     text: Any
     image: Any | None
     image_embeddings_are_urls: bool = False
+    native_bm25: bool = False
 
     @classmethod
     def connect(
@@ -30,6 +31,7 @@ class LangChainMilvusIndexes:
         image_collection: str | None,
         text_embeddings: EmbeddingProvider,
         image_embeddings: EmbeddingProvider | None = None,
+        native_bm25: bool = False,
     ) -> "LangChainMilvusIndexes":
         try:
             from pymilvus import MilvusClient, connections
@@ -47,21 +49,35 @@ class LangChainMilvusIndexes:
         # to pre-create the collection ourselves with a minimal schema
         # breaks the read path because LangChain expects to read the
         # original page_content back from the "text" field.
-        index_params = {
+        dense_index_params = {
             "metric_type": "COSINE",
             "index_type": "HNSW",
             "params": {"M": 16, "efConstruction": 64},
         }
 
         connection_args = {"uri": uri}
+        text_options: dict[str, Any] = {}
+        search_params: Any = {"metric_type": "COSINE", "params": {"ef": 64}}
+        index_params: Any = dense_index_params
+        if native_bm25:
+            from langchain_milvus import BM25BuiltInFunction
+            text_options = {
+                "vector_field": ["vector", "sparse"],
+                "builtin_function": BM25BuiltInFunction(input_field_names="text", output_field_names="sparse"),
+            }
+            index_params = [dense_index_params, {"metric_type": "BM25", "index_type": "SPARSE_INVERTED_INDEX"}]
+            search_params = [search_params, {"metric_type": "BM25", "params": {}}]
+
         text_store = Milvus(
             embedding_function=text_embeddings,
             collection_name=text_collection,
             connection_args=connection_args,
             auto_id=False,
             index_params=index_params,
+            search_params=search_params,
             enable_dynamic_field=False,
             metadata_field="metadata",
+            **text_options,
         )
         image_store = None
         if image_collection and image_embeddings:
@@ -70,7 +86,8 @@ class LangChainMilvusIndexes:
                 collection_name=image_collection,
                 connection_args=connection_args,
                 auto_id=False,
-                index_params=index_params,
+                index_params=dense_index_params,
+                search_params={"metric_type": "COSINE", "params": {"ef": 64}},
                 enable_dynamic_field=False,
                 metadata_field="metadata",
             )
@@ -78,6 +95,7 @@ class LangChainMilvusIndexes:
             text=text_store,
             image=image_store,
             image_embeddings_are_urls=bool(getattr(image_embeddings, "catalog_image_urls", False)),
+            native_bm25=native_bm25,
         )
 
     def upsert(self, documents: list[ProductDocument]) -> None:
@@ -104,9 +122,11 @@ class LangChainMilvusIndexes:
 
     def dense_search(self, query: str, *, limit: int = 20) -> list[Candidate]:
         try:
-            return [Candidate(str(doc.metadata["product_id"]), float(score)) for doc, score in self.text.similarity_search_with_relevance_scores(query, k=limit)]
+            options = {"ranker_type": "rrf", "ranker_params": {"k": 60}} if self.native_bm25 else {}
+            return [Candidate(str(doc.metadata["product_id"]), float(score)) for doc, score in self.text.similarity_search_with_relevance_scores(query, k=limit, **options)]
         except ValueError:
-            return [Candidate(str(doc.metadata["product_id"]), float(score)) for doc, score in self.text.similarity_search_with_score(query, k=limit)]
+            options = {"ranker_type": "rrf", "ranker_params": {"k": 60}} if self.native_bm25 else {}
+            return [Candidate(str(doc.metadata["product_id"]), float(score)) for doc, score in self.text.similarity_search_with_score(query, k=limit, **options)]
 
     def image_search(self, query: str, *, limit: int = 20) -> list[Candidate]:
         if not self.image:

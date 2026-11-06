@@ -15,14 +15,15 @@ func (s TransactionStatus) Terminal() bool { return s == Failed || s == Success 
 
 type Transaction struct {
 	gorm.Model
-	OrderId        uint64 `json:"order_id"`
-	UserId         uint64 `json:"user_id"`
-	PaymentId      string `json:"payment_id" gorm:"uniqueIndex"`
-	TotalPrice     int64  `json:"total_price"`
-	SettledPrice   int64  `json:"settled_price"`
-	Currency       string `json:"currency"`
-	Status         string `json:"status" gorm:"type:varchar(20);index"`
-	ReservationIDs string `json:"reservation_ids" gorm:"type:text"`
+	OrderId        uint64  `json:"order_id"`
+	UserId         uint64  `json:"user_id"`
+	CheckoutKey    *string `json:"checkout_key,omitempty" gorm:"uniqueIndex"`
+	PaymentId      string  `json:"payment_id" gorm:"uniqueIndex"`
+	TotalPrice     int64   `json:"total_price"`
+	SettledPrice   int64   `json:"settled_price"`
+	Currency       string  `json:"currency"`
+	Status         string  `json:"status" gorm:"type:varchar(20);index"`
+	ReservationIDs string  `json:"reservation_ids" gorm:"type:text"`
 }
 type Refund struct {
 	gorm.Model

@@ -19,6 +19,7 @@ type Repository interface {
 	UpdateProduct(context.Context, *models.Product) error
 	DeleteProduct(context.Context, string) error
 	RegisterTransaction(context.Context, *models.Transaction) error
+	GetPendingTransactionByCheckoutKey(context.Context, string) (*models.Transaction, error)
 	UpdateTransaction(context.Context, *models.Transaction) error
 	ListTransactions(context.Context, string, uint64, uint64, uint64) ([]*models.Transaction, error)
 	GetTransactionByPaymentID(context.Context, string) (*models.Transaction, error)
@@ -35,6 +36,11 @@ func NewPostgresRepository(db *gorm.DB) (Repository, error) {
 			}
 		}
 		return nil
+	}); e != nil {
+		return nil, e
+	}
+	if e := migrations.Run(db, "payment", "002_checkout_retry", func(db *gorm.DB) error {
+		return db.AutoMigrate(&models.Transaction{})
 	}); e != nil {
 		return nil, e
 	}
@@ -88,6 +94,11 @@ func (r *postgresRepository) DeleteProduct(c context.Context, id string) error {
 }
 func (r *postgresRepository) RegisterTransaction(c context.Context, x *models.Transaction) error {
 	return r.db.WithContext(c).Create(x).Error
+}
+func (r *postgresRepository) GetPendingTransactionByCheckoutKey(c context.Context, key string) (*models.Transaction, error) {
+	var x models.Transaction
+	e := r.db.WithContext(c).First(&x, "checkout_key = ? AND status = ?", key, models.Pending.String()).Error
+	return &x, e
 }
 func (r *postgresRepository) UpdateTransaction(c context.Context, x *models.Transaction) error {
 	return r.db.WithContext(c).Save(x).Error

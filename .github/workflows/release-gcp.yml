@@ -151,6 +151,7 @@ jobs:
           - { service: web, dockerfile: web }
           - { service: recommender-server, dockerfile: recommender }
           - { service: recommender-sync, dockerfile: recommender }
+          - { service: recommender-ingestion, dockerfile: recommender }
           - { service: recommender-train, dockerfile: recommender }
     steps:
       - uses: actions/checkout@v4

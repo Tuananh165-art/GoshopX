@@ -6,22 +6,23 @@ import { useAuth } from '../auth/AuthContext'
 type CartContextValue = {
   cart: CartLine[]
   expiresAt: string | null
+  cartVersion: string
   loading: boolean
   error: string
   add: (product: Product, quantity?: number) => Promise<void>
   update: (productId: string, quantity: number) => Promise<void>
   remove: (productId: string) => Promise<void>
   clear: () => Promise<void>
-  checkout: (redirectUrl: string) => Promise<void>
-  checkoutCOD: () => Promise<number>
+  checkout: (redirectUrl: string, quoteID: string, expectedCartVersion: string) => Promise<void>
+  checkoutCOD: (quoteID: string, expectedCartVersion: string) => Promise<number>
   refresh: () => Promise<void>
 }
 
 const CartContext = createContext<CartContextValue | null>(null)
-const cartFields = `accountId expiresAt items { quantity reservationId reservedUntil product { id name description price discountPercentage rating stock brand thumbnail images tags availabilityStatus shippingInformation returnPolicy warrantyInformation reviews { rating comment date reviewerName reviewerEmail } } }`
+const cartFields = `accountId version expiresAt items { quantity reservationId reservedUntil product { id name description price discountPercentage rating stock brand thumbnail images tags availabilityStatus shippingInformation returnPolicy warrantyInformation reviews { rating comment date reviewerName reviewerEmail } } }`
 
 type ServerProduct = Product & { name?: string; categoryId?: string; id: number | string }
-type ServerCartValue = { expiresAt: string; items: Array<{ quantity: number; reservedUntil: string; product: ServerProduct }> }
+type ServerCartValue = { version: string; expiresAt: string; items: Array<{ quantity: number; reservedUntil: string; product: ServerProduct }> }
 type ServerCart = { myCart: ServerCartValue }
 
 type CartMutationResult = { cart?: ServerCartValue }
@@ -39,6 +40,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const { authenticated, pending: authPending } = useAuth()
   const [cart, setCart] = useState<CartLine[]>([])
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
+  const [cartVersion, setCartVersion] = useState('0')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -48,6 +50,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const result = await graphql<ServerCart>(`query MyCart { myCart { ${cartFields} } }`)
       setCart(toLines(result.myCart))
       setExpiresAt(result.myCart.expiresAt || null)
+      setCartVersion(result.myCart.version || '0')
       setError('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể tải giỏ hàng.')
@@ -62,6 +65,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     else {
       setCart([])
       setExpiresAt(null)
+      setCartVersion('0')
     }
   }, [authPending, authenticated, refresh])
 
@@ -72,6 +76,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (result.cart) {
         setCart(toLines(result.cart))
         setExpiresAt(result.cart.expiresAt || null)
+        setCartVersion(result.cart.version || '0')
       }
       setError('')
     } catch (cause) {
@@ -85,6 +90,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CartContextValue>(() => ({
     cart,
     expiresAt,
+    cartVersion,
     loading,
     error,
     refresh,
@@ -106,6 +112,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         await graphql<{ clearCart: boolean }>('mutation ClearCart { clearCart }')
         setCart([])
         setExpiresAt(null)
+        setCartVersion('0')
         setError('')
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Không thể xóa giỏ hàng.')
@@ -114,12 +121,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       }
     },
-    checkout: async redirectUrl => {
+    checkout: async (redirectUrl, quoteID, expectedCartVersion) => {
       setLoading(true)
       try {
         const result = await graphql<{ checkoutCart: { url: string } }>(
-          'mutation Checkout($redirectUrl: String!) { checkoutCart(redirectUrl: $redirectUrl) { url } }',
-          { redirectUrl },
+          'mutation Checkout($redirectUrl: String!, $quoteId: ID!, $cartVersion: String!) { checkoutCart(redirectUrl: $redirectUrl, quoteId: $quoteId, cartVersion: $cartVersion) { url } }',
+          { redirectUrl, quoteId: quoteID, cartVersion: expectedCartVersion },
         )
         setError('')
         window.location.assign(result.checkoutCart.url)
@@ -130,14 +137,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       }
     },
-    checkoutCOD: async () => {
+    checkoutCOD: async (quoteID, expectedCartVersion) => {
       setLoading(true)
       try {
         const result = await graphql<{ checkoutCartCOD: { orderId: number } }>(
-          'mutation CheckoutCOD { checkoutCartCOD { orderId status } }',
+          'mutation CheckoutCOD($quoteId: ID!, $cartVersion: String!) { checkoutCartCOD(quoteId: $quoteId, cartVersion: $cartVersion) { orderId status } }',
+          { quoteId: quoteID, cartVersion: expectedCartVersion },
         )
         setCart([])
         setExpiresAt(null)
+        setCartVersion('0')
         setError('')
         return result.checkoutCartCOD.orderId
       } catch (cause) {
@@ -147,7 +156,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       }
     },
-  }), [cart, expiresAt, loading, error, refresh])
+  }), [cart, expiresAt, cartVersion, loading, error, refresh])
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }

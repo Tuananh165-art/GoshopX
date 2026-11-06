@@ -18,24 +18,9 @@ class ProductIndexer:
     embeddings: Any
     vision_llm: LLMClient | None = None
 
-    def upsert(self, product: dict[str, Any]) -> None:
-        document = build_product_document(product)
-        descriptions: list[str] = []
-        if self.vision_llm:
-            for image_url in document.image_urls:
-                try:
-                    descriptions.append(self.vision_llm.describe_image(image_url))
-                except Exception:
-                    logger.warning("image description failed for product %s", document.product_id, exc_info=True)
-                    descriptions.append(document.text)
-        document = ProductDocument(
-            document.product_id,
-            document.text,
-            document.image_urls,
-            document.metadata,
-            tuple(descriptions),
-        )
-        self.indexes.upsert([document])
+    def upsert(self, product: dict[str, Any] | list[dict[str, Any]]) -> None:
+        products = product if isinstance(product, list) else [product]
+        self.indexes.upsert([build_product_document(item) for item in products])
 
     def delete(self, product_id: str) -> None:
         self.indexes.text.delete([str(product_id)])
@@ -43,10 +28,10 @@ class ProductIndexer:
             self.indexes.image.delete(expr=f'product_id == "{str(product_id).replace(chr(34), "")}"')
 
 
-def build_product_indexer(*, uri: str, collection: str, image_collection: str, dimension: int, vision_llm: LLMClient | None = None, gemini_api_key: str = "", gemini_model: str = "gemini-embedding-2") -> ProductIndexer:
+def build_product_indexer(*, uri: str, collection: str, image_collection: str, dimension: int, vision_llm: LLMClient | None = None, gemini_api_key: str = "", gemini_model: str = "gemini-embedding-2", spend_ledger: Any | None = None, native_bm25: bool = False) -> ProductIndexer:
     if not gemini_api_key and collection.startswith("product_catalog_gemini_"):
         raise ValueError("Gemini API key is required for a Gemini vector collection")
-    embeddings = GeminiEmbedding(gemini_api_key, model=gemini_model, dimension=dimension) if gemini_api_key else HashEmbedding(dimension)
+    embeddings = GeminiEmbedding(gemini_api_key, model=gemini_model, dimension=dimension, spend_ledger=spend_ledger) if gemini_api_key else HashEmbedding(dimension)
     image_embeddings = GeminiCatalogImageEmbedding(embeddings) if gemini_api_key else embeddings
     indexes = LangChainMilvusIndexes.connect(
         uri=uri,
@@ -54,5 +39,6 @@ def build_product_indexer(*, uri: str, collection: str, image_collection: str, d
         image_collection=image_collection,
         text_embeddings=embeddings,
         image_embeddings=image_embeddings,
+        native_bm25=native_bm25,
     )
     return ProductIndexer(indexes=indexes, embeddings=embeddings, vision_llm=vision_llm)

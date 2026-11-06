@@ -58,6 +58,11 @@ func (r *mutationServer) RecommendChat(ctx context.Context, input generated.Reco
 	panic(fmt.Errorf("not implemented: RecommendChat - recommendChat"))
 }
 
+// DeleteChatSession is the resolver for the deleteChatSession field.
+func (r *mutationServer) DeleteChatSession(ctx context.Context, sessionID string) (bool, error) {
+	panic(fmt.Errorf("not implemented: DeleteChatSession - deleteChatSession"))
+}
+
 // CreateProduct is the resolver for the createProduct field.
 func (r *mutationServer) CreateProduct(ctx context.Context, product generated.CreateProductInput) (*generated.Product, error) {
 	panic(fmt.Errorf("not implemented: CreateProduct - createProduct"))
@@ -103,6 +108,16 @@ func (r *mutationServer) UpdateCartItemQuantity(ctx context.Context, productID s
 	panic(fmt.Errorf("not implemented: UpdateCartItemQuantity - updateCartItemQuantity"))
 }
 
+// CreateCartProposal is the resolver for the createCartProposal field.
+func (r *mutationServer) CreateCartProposal(ctx context.Context, expectedCartVersion string, idempotencyKey string, items []*generated.CartProposalItemInput) (*generated.CartProposal, error) {
+	panic(fmt.Errorf("not implemented: CreateCartProposal - createCartProposal"))
+}
+
+// ConfirmCartProposal is the resolver for the confirmCartProposal field.
+func (r *mutationServer) ConfirmCartProposal(ctx context.Context, proposalID string) (*generated.Cart, error) {
+	panic(fmt.Errorf("not implemented: ConfirmCartProposal - confirmCartProposal"))
+}
+
 // AddProductReview is the resolver for the addProductReview field.
 func (r *mutationServer) AddProductReview(ctx context.Context, productID string, rating int, comment string) (*generated.Product, error) {
 	panic(fmt.Errorf("not implemented: AddProductReview - addProductReview"))
@@ -119,12 +134,12 @@ func (r *mutationServer) ClearCart(ctx context.Context) (bool, error) {
 }
 
 // CheckoutCart is the resolver for the checkoutCart field.
-func (r *mutationServer) CheckoutCart(ctx context.Context, redirectURL string) (*generated.RedirectResponse, error) {
+func (r *mutationServer) CheckoutCart(ctx context.Context, redirectURL string, quoteID string, cartVersion string) (*generated.RedirectResponse, error) {
 	panic(fmt.Errorf("not implemented: CheckoutCart - checkoutCart"))
 }
 
 // CheckoutCartCod is the resolver for the checkoutCartCOD field.
-func (r *mutationServer) CheckoutCartCod(ctx context.Context) (*generated.CODCheckoutResponse, error) {
+func (r *mutationServer) CheckoutCartCod(ctx context.Context, quoteID string, cartVersion string) (*generated.CODCheckoutResponse, error) {
 	panic(fmt.Errorf("not implemented: CheckoutCartCod - checkoutCartCOD"))
 }
 
@@ -203,9 +218,39 @@ func (r *mutationServer) AdminAdjustInventory(ctx context.Context, input generat
 	panic(fmt.Errorf("not implemented: AdminAdjustInventory - adminAdjustInventory"))
 }
 
+// AdminUploadKnowledgeDocument is the resolver for the adminUploadKnowledgeDocument field.
+func (r *mutationServer) AdminUploadKnowledgeDocument(ctx context.Context, file graphql.Upload, idempotencyKey string, productID *string) (*generated.KnowledgeIngestionJob, error) {
+	panic(fmt.Errorf("not implemented: AdminUploadKnowledgeDocument - adminUploadKnowledgeDocument"))
+}
+
+// AdminPreviewKnowledgeDocument is the resolver for the adminPreviewKnowledgeDocument field.
+func (r *mutationServer) AdminPreviewKnowledgeDocument(ctx context.Context, file graphql.Upload) (*generated.KnowledgeDocumentPreview, error) {
+	panic(fmt.Errorf("not implemented: AdminPreviewKnowledgeDocument - adminPreviewKnowledgeDocument"))
+}
+
+// AdminCancelKnowledgeIngestionJob is the resolver for the adminCancelKnowledgeIngestionJob field.
+func (r *mutationServer) AdminCancelKnowledgeIngestionJob(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: AdminCancelKnowledgeIngestionJob - adminCancelKnowledgeIngestionJob"))
+}
+
+// AdminRetryKnowledgeIngestionJob is the resolver for the adminRetryKnowledgeIngestionJob field.
+func (r *mutationServer) AdminRetryKnowledgeIngestionJob(ctx context.Context, id string) (bool, error) {
+	panic(fmt.Errorf("not implemented: AdminRetryKnowledgeIngestionJob - adminRetryKnowledgeIngestionJob"))
+}
+
+// AdminSetKnowledgeSourceStatus is the resolver for the adminSetKnowledgeSourceStatus field.
+func (r *mutationServer) AdminSetKnowledgeSourceStatus(ctx context.Context, sourceID string, status string) (bool, error) {
+	panic(fmt.Errorf("not implemented: AdminSetKnowledgeSourceStatus - adminSetKnowledgeSourceStatus"))
+}
+
 // Availability is the resolver for the availability field.
 func (r *productServer) Availability(ctx context.Context, obj *generated.Product) (*generated.InventoryAvailability, error) {
 	panic(fmt.Errorf("not implemented: Availability - availability"))
+}
+
+// PreviewCartCheckout is the resolver for the previewCartCheckout field.
+func (r *queryServer) PreviewCartCheckout(ctx context.Context, couponCode *string) (*generated.CheckoutQuote, error) {
+	panic(fmt.Errorf("not implemented: PreviewCartCheckout - previewCartCheckout"))
 }
 
 // Accounts is the resolver for the accounts field.
@@ -306,6 +351,16 @@ func (r *queryServer) AdminLowStock(ctx context.Context, limit int) ([]*generate
 // AdminReservations is the resolver for the adminReservations field.
 func (r *queryServer) AdminReservations(ctx context.Context, status *string, pagination *generated.PaginationInput) ([]*generated.StockReservation, error) {
 	panic(fmt.Errorf("not implemented: AdminReservations - adminReservations"))
+}
+
+// AdminKnowledgeIngestionJobs is the resolver for the adminKnowledgeIngestionJobs field.
+func (r *queryServer) AdminKnowledgeIngestionJobs(ctx context.Context, limit *int) ([]*generated.KnowledgeIngestionJob, error) {
+	panic(fmt.Errorf("not implemented: AdminKnowledgeIngestionJobs - adminKnowledgeIngestionJobs"))
+}
+
+// AdminKnowledgeIngestionAuditEvents is the resolver for the adminKnowledgeIngestionAuditEvents field.
+func (r *queryServer) AdminKnowledgeIngestionAuditEvents(ctx context.Context, limit *int) ([]*generated.KnowledgeIngestionAuditEvent, error) {
+	panic(fmt.Errorf("not implemented: AdminKnowledgeIngestionAuditEvents - adminKnowledgeIngestionAuditEvents"))
 }
 
 type accountServer struct{ *Server }

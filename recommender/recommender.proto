@@ -49,6 +49,13 @@ message ChatProduct {
   int64 stock = 9;
   double retrieval_score = 10;
   repeated string matched_reasons = 11;
+  string sku = 12;
+  double discount_percentage = 13;
+  string warranty_information = 14;
+  string shipping_information = 15;
+  string return_policy = 16;
+  string availability_status = 17;
+  string brand = 18;
 }
 
 message ChatRecommendationResponse {
@@ -57,10 +64,86 @@ message ChatRecommendationResponse {
   repeated string next_suggestions = 3;
   repeated string warnings = 4;
   string request_id = 5;
+  string session_id = 6;
+  repeated ChatSource sources = 7;
+}
+
+message ChatSource {
+  string title = 1;
+  string url = 2;
+  string published_at = 3;
+}
+
+message DeleteChatHistoryRequest {
+  string user_id = 1;
+  string session_id = 2;
+}
+
+message DeleteChatHistoryResponse { bool deleted = 1; }
+
+message EnqueueKnowledgeIngestionRequest {
+  string source_id = 1;
+  string name = 2;
+  string object_uri = 3;
+  string content_type = 4;
+  string sha256 = 5;
+  int64 owner_account_id = 6;
+  string idempotency_key = 7;
+  string linked_product_id = 8;
+}
+message KnowledgeIngestionJobRequest { string job_id = 1; }
+message ListKnowledgeIngestionJobsRequest { uint32 limit = 1; }
+message CancelKnowledgeIngestionJobRequest { string job_id = 1; int64 owner_account_id = 2; }
+message KnowledgeIngestionJob {
+  string id = 1;
+  string source_id = 2;
+  string name = 3;
+  string status = 4;
+  uint32 attempts = 5;
+  string error_code = 6;
+  int64 created_at_unix = 7;
+  uint32 chunk_count = 8;
+  string source_status = 9;
+}
+message KnowledgeIngestionJobList { repeated KnowledgeIngestionJob jobs = 1; }
+message CancelKnowledgeIngestionJobResponse { bool cancelled = 1; }
+message RetryKnowledgeIngestionJobRequest { string job_id = 1; int64 actor_account_id = 2; }
+message RetryKnowledgeIngestionJobResponse { bool queued = 1; }
+message SetKnowledgeSourceStatusRequest { string source_id = 1; string status = 2; int64 actor_account_id = 3; }
+message SetKnowledgeSourceStatusResponse { bool updated = 1; }
+message ListIngestionAuditEventsRequest { uint32 limit = 1; }
+message IngestionAuditEvent {
+  string id = 1;
+  int64 actor_account_id = 2;
+  string action = 3;
+  string source_id = 4;
+  string job_id = 5;
+  string outcome = 6;
+  int64 occurred_at_unix = 7;
+}
+message IngestionAuditEventList { repeated IngestionAuditEvent events = 1; }
+message PreviewKnowledgeDocumentRequest { string name = 1; string content_type = 2; bytes content = 3; }
+message KnowledgeDocumentChunkPreview { uint32 index = 1; string text = 2; uint32 characters = 3; }
+message KnowledgeDocumentPreview {
+  uint32 chunk_count = 1;
+  uint32 total_characters = 2;
+  uint64 estimated_embedding_tokens = 3;
+  uint64 estimated_embedding_cost_vnd = 4;
+  repeated KnowledgeDocumentChunkPreview samples = 5;
+  bool cost_estimate_available = 6;
 }
 
 service RecommenderService {
   rpc GetRecommendations (RecommendationRequestForUserId) returns (RecommendationResponse);
   rpc GetRecommendationsBasedOnViewed (RecommendationRequestOnViews) returns (RecommendationResponse);
   rpc ChatRecommend (ChatRecommendationRequest) returns (ChatRecommendationResponse);
+  rpc DeleteChatHistory (DeleteChatHistoryRequest) returns (DeleteChatHistoryResponse);
+  rpc EnqueueKnowledgeIngestion (EnqueueKnowledgeIngestionRequest) returns (KnowledgeIngestionJob);
+  rpc GetKnowledgeIngestionJob (KnowledgeIngestionJobRequest) returns (KnowledgeIngestionJob);
+  rpc ListKnowledgeIngestionJobs (ListKnowledgeIngestionJobsRequest) returns (KnowledgeIngestionJobList);
+  rpc CancelKnowledgeIngestionJob (CancelKnowledgeIngestionJobRequest) returns (CancelKnowledgeIngestionJobResponse);
+  rpc RetryKnowledgeIngestionJob (RetryKnowledgeIngestionJobRequest) returns (RetryKnowledgeIngestionJobResponse);
+  rpc SetKnowledgeSourceStatus (SetKnowledgeSourceStatusRequest) returns (SetKnowledgeSourceStatusResponse);
+  rpc PreviewKnowledgeDocument (PreviewKnowledgeDocumentRequest) returns (KnowledgeDocumentPreview);
+  rpc ListIngestionAuditEvents (ListIngestionAuditEventsRequest) returns (IngestionAuditEventList);
 }

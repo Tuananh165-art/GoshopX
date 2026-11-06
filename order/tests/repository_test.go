@@ -137,6 +137,97 @@ func TestRepository_PutOrder(t *testing.T) {
 	})
 }
 
+func TestRepository_PutOrderWithCouponUsesAndRecordsCouponAtomically(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := internal.NewPostgresRepository(db)
+	require.NoError(t, err)
+	coupon := models.Coupon{Code: "LAB10", PercentBasisPoint: 1000, MinimumSubtotalVND: 1_000_000, MaximumDiscountVND: 100_000, MaximumRedemptions: 2, PerAccountLimit: 1, ExpiresAt: time.Now().Add(time.Hour), Active: true}
+	require.NoError(t, db.Create(&coupon).Error)
+
+	order := &models.Order{AccountID: 42, SubtotalVND: 2_000_000, TotalPriceVND: 2_000_000, TotalPrice: 2_000_000, CreatedAt: time.Now().UTC(), Products: []*models.OrderedProduct{{ID: "p1", Name: "Test", Price: 2_000_000, Quantity: 1}}}
+	require.NoError(t, repo.PutOrderWithCoupon(context.Background(), order, " lab10 "))
+	assert.Equal(t, "LAB10", order.CouponCode)
+	assert.Equal(t, int64(100_000), order.DiscountVND)
+	assert.Equal(t, int64(1_900_000), order.TotalPriceVND)
+
+	var saved models.Order
+	require.NoError(t, db.First(&saved, order.ID).Error)
+	assert.Equal(t, int64(1_900_000), saved.TotalPriceVND)
+	var uses int64
+	require.NoError(t, db.Model(&models.CouponRedemption{}).Where("coupon_code = ?", "LAB10").Count(&uses).Error)
+	assert.Equal(t, int64(1), uses)
+	discount, err := repo.PreviewCoupon(context.Background(), 7, 2_000_000, "lab10")
+	require.NoError(t, err)
+	assert.Equal(t, int64(100_000), discount)
+	require.NoError(t, db.Model(&models.CouponRedemption{}).Where("coupon_code = ?", "LAB10").Count(&uses).Error)
+	assert.Equal(t, int64(1), uses, "preview must not consume a redemption")
+
+	second := &models.Order{AccountID: 42, SubtotalVND: 2_000_000, TotalPrice: 2_000_000, CreatedAt: time.Now().UTC()}
+	err = repo.PutOrderWithCoupon(context.Background(), second, "LAB10")
+	assert.ErrorIs(t, err, internal.ErrInvalidCoupon)
+	assert.Zero(t, second.ID)
+}
+
+func TestRepository_PutOrderWithQuoteValidatesAndConsumesIdempotently(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := internal.NewPostgresRepository(db)
+	require.NoError(t, err)
+	defer repo.Close()
+	products := []*models.OrderedProduct{{ID: "p1", Name: "Phone", Price: 2_000_000, Quantity: 1}}
+	require.NoError(t, db.Create(&models.Coupon{Code: "LAB10", PercentBasisPoint: 1000, MinimumSubtotalVND: 1_000_000, MaximumDiscountVND: 100_000, MaximumRedemptions: 1, PerAccountLimit: 1, ExpiresAt: time.Now().UTC().Add(time.Hour), Active: true}).Error)
+	quote := &models.CheckoutQuoteRecord{ID: "quote-1", AccountID: 42, ItemsHash: models.CheckoutItemsHash(products), SubtotalVND: 2_000_000, DiscountVND: 100_000, TotalPriceVND: 1_900_000, CouponCode: "LAB10", ExpiresAt: time.Now().UTC().Add(time.Minute), CartVersion: 9}
+	require.NoError(t, repo.CreateCheckoutQuote(context.Background(), quote))
+	order := &models.Order{AccountID: 42, SubtotalVND: 2_000_000, TotalPriceVND: 2_000_000, TotalPrice: 2_000_000, CreatedAt: time.Now().UTC(), Products: products}
+	created, err := repo.PutOrderWithQuote(context.Background(), order, quote.ID, quote.ItemsHash, quote.CartVersion)
+	require.NoError(t, err)
+	assert.True(t, created)
+	assert.NotZero(t, order.ID)
+	assert.Equal(t, int64(100_000), order.DiscountVND)
+	assert.Equal(t, int64(1_900_000), order.TotalPriceVND)
+
+	retry := &models.Order{AccountID: 42}
+	created, err = repo.PutOrderWithQuote(context.Background(), retry, quote.ID, quote.ItemsHash, quote.CartVersion)
+	require.NoError(t, err)
+	assert.False(t, created)
+	assert.Equal(t, order.ID, retry.ID)
+	assert.Len(t, retry.Products, 1)
+	require.NotNil(t, retry.CheckoutQuoteID)
+	assert.Equal(t, quote.ID, *retry.CheckoutQuoteID)
+	var uses int64
+	require.NoError(t, db.Model(&models.CouponRedemption{}).Where("coupon_code = ?", "LAB10").Count(&uses).Error)
+	assert.Equal(t, int64(1), uses, "retrying an already-consumed quote must not redeem the coupon twice")
+}
+
+func TestRepository_PutOrderWithQuoteRejectsWrongOwnerStaleVersionAndExpiry(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		owner   uint64
+		version uint64
+		expired bool
+	}{
+		{name: "wrong owner", owner: 7, version: 9},
+		{name: "stale cart", owner: 42, version: 8},
+		{name: "expired", owner: 42, version: 9, expired: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			repo, err := internal.NewPostgresRepository(db)
+			require.NoError(t, err)
+			defer repo.Close()
+			products := []*models.OrderedProduct{{ID: "p1", Quantity: 1}}
+			expires := time.Now().UTC().Add(time.Minute)
+			if tc.expired {
+				expires = time.Now().UTC().Add(-time.Minute)
+			}
+			quote := &models.CheckoutQuoteRecord{ID: "quote-1", AccountID: 42, ItemsHash: models.CheckoutItemsHash(products), SubtotalVND: 500, ExpiresAt: expires, CartVersion: 9}
+			require.NoError(t, repo.CreateCheckoutQuote(context.Background(), quote))
+			order := &models.Order{AccountID: tc.owner, SubtotalVND: 500, Products: products}
+			_, err = repo.PutOrderWithQuote(context.Background(), order, quote.ID, quote.ItemsHash, tc.version)
+			assert.ErrorIs(t, err, internal.ErrInvalidCheckoutQuote)
+		})
+	}
+}
+
 func TestRepository_GetOrdersForAccount(t *testing.T) {
 	t.Skip("Skipping test - GetOrdersForAccount uses PostgreSQL-specific SQL")
 }

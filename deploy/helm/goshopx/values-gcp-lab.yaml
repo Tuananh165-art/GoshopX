@@ -39,6 +39,7 @@ services:
   admin: {enabled: true, imageDigest: 'sha256:d76f265a751a94ffcf41c3310e04170bdb949ad461486170db7c9f5b64ab2658'}
   recommender-server: {enabled: true, imageDigest: 'sha256:e2d4f68e158624645abc5e4da85057925986d226d1cd35b26fa7db6c3b527c9a'}
   recommender-sync: {enabled: true, probesEnabled: false, imageDigest: 'sha256:349be5152883f1b9db64e6982a7aa3c63a41d6a01a633f6644efd243e27dd0f0'}
+  recommender-ingestion: {enabled: true}
   recommender-train: {enabled: false, imageDigest: 'sha256:0af227e71fb91432ff578a7ba3430a7645549e7525fe0fa97944d501b4f4bb29'}
   account:
     imageDigest: sha256:08d31ff8d2e4cdb529126fbc0daa1408e2d5606e895a1ed24952e460c028dab4
@@ -61,12 +62,12 @@ services:
     imageDigest: sha256:5d281aab9a93ebc2c218907eacb649e32f37e8755b65e092215f0390f6b6a0c1
 config:
   GCS_MEDIA_BUCKET: "generated-mote-467410-b0-media"
-  DUMMYJSON_SEED_ENABLED: "true"
+  DUMMYJSON_SEED_ENABLED: "false"
   DUMMYJSON_SEED_LIMIT: "0"
   DUMMYJSON_PRICE_VND_RATE: "25000"
   PRODUCT_API: http://product:8081/products
-  AI_ENDPOINT: https://api.deepseek.com/chat/completions
-  AI_MODEL: deepseek-flash
+  DEEPSEEK_BASE_URL: https://api.deepseek.com
+  DEEPSEEK_MODEL: deepseek-flash
   AI_TIMEOUT_SECONDS: "30"
   AI_MAX_RETRIES: "1"
   MILVUS_COLLECTION: product_catalog_gemini_v2
@@ -74,6 +75,18 @@ config:
   IMAGE_EMBEDDING_DIMENSION: "768"
   GEMINI_EMBEDDING_MODEL: gemini-embedding-2
   GEMINI_EMBEDDING_DIMENSION: "768"
+  JEV_MODE: shadow
+  JEV_RERANK_ENABLED: "true"
+  AI_SPEND_LIMIT_VND: "200000"
+  AI_SPEND_RESERVE_PER_CALL_VND: "500"
+  # Configure reviewed rates before live use; empty rates retain the reservation.
+  AI_DEEPSEEK_INPUT_VND_PER_MILLION_TOKENS: ""
+  AI_DEEPSEEK_OUTPUT_VND_PER_MILLION_TOKENS: ""
+  AI_GEMINI_INPUT_VND_PER_MILLION_TOKENS: ""
+  AI_GEMINI_OUTPUT_VND_PER_MILLION_TOKENS: ""
+  AI_TAVILY_CALL_VND: ""
+  AI_TYPESAFE_CALL_VND: ""
+  CHAT_MEMORY_ENABLED: "true"
   ARTIFACTS_LOCAL_PATH: /tmp/artifacts
 observability:
   metricsPort: 9090

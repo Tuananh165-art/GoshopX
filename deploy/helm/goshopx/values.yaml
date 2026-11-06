@@ -164,13 +164,20 @@ services:
     enabled: false
     port: 8080
     command: [python, main.py, server]
-    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY, DEEPSEEK_API_KEY: DEEPSEEK_API_KEY, GEMINI_API_KEY: GEMINI_API_KEY }
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, DEEPSEEK_API_KEY: DEEPSEEK_API_KEY, GEMINI_API_KEY: GEMINI_API_KEY, TAVILY_API_KEY: TAVILY_API_KEY, TYPESAFE_API_KEY: TYPESAFE_API_KEY, LANGSMITH_API_KEY: LANGSMITH_API_KEY, CHAT_SESSION_SIGNING_KEY: SECRET_KEY }
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 750m, memory: 768Mi } }
   recommender-sync:
     enabled: false
     port: 8080
     command: [python, main.py, consumer]
-    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, AI_API_KEY: AI_API_KEY, DEEPSEEK_API_KEY: DEEPSEEK_API_KEY, GEMINI_API_KEY: GEMINI_API_KEY }
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, DEEPSEEK_API_KEY: DEEPSEEK_API_KEY, GEMINI_API_KEY: GEMINI_API_KEY, TAVILY_API_KEY: TAVILY_API_KEY, TYPESAFE_API_KEY: TYPESAFE_API_KEY, LANGSMITH_API_KEY: LANGSMITH_API_KEY, CHAT_SESSION_SIGNING_KEY: SECRET_KEY }
+    resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } }
+  recommender-ingestion:
+    enabled: false
+    probesEnabled: false
+    port: 8080
+    command: [python, main.py, ingestion-worker]
+    secretKeys: { DATABASE_URL: RECOMMENDER_DATABASE_URL, GEMINI_API_KEY: GEMINI_API_KEY }
     resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } }
   recommender-train:
     enabled: false
@@ -203,6 +210,14 @@ config:
   MINIO_USE_SSL: "false"
   MINIO_PUBLIC_URL: ""
   GCS_MEDIA_BUCKET: ""
+  AI_SPEND_LIMIT_VND: "200000"
+  AI_SPEND_RESERVE_PER_CALL_VND: "500"
+  AI_DEEPSEEK_INPUT_VND_PER_MILLION_TOKENS: ""
+  AI_DEEPSEEK_OUTPUT_VND_PER_MILLION_TOKENS: ""
+  AI_GEMINI_INPUT_VND_PER_MILLION_TOKENS: ""
+  AI_GEMINI_OUTPUT_VND_PER_MILLION_TOKENS: ""
+  AI_TAVILY_CALL_VND: ""
+  AI_TYPESAFE_CALL_VND: ""
   DUMMYJSON_SEED_ENABLED: "false"
   PRODUCT_EVENTS_TOPIC: product_events
   INTERACTION_EVENTS_TOPIC: interaction_events

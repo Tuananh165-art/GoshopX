@@ -27,6 +27,14 @@ func (m *MockRepository) UpsertStock(ctx context.Context, productID string, quan
 	return args.Get(0).(*models.Stock), args.Error(1)
 }
 
+func (m *MockRepository) InitializeStock(ctx context.Context, productID string, quantity, reorderLevel int32) (*models.Stock, bool, error) {
+	args := m.Called(ctx, productID, quantity, reorderLevel)
+	if args.Get(0) == nil {
+		return nil, args.Bool(1), args.Error(2)
+	}
+	return args.Get(0).(*models.Stock), args.Bool(1), args.Error(2)
+}
+
 func (m *MockRepository) GetAvailability(ctx context.Context, productID string) (*models.Availability, error) {
 	args := m.Called(ctx, productID)
 	if args.Get(0) == nil {
@@ -130,6 +138,19 @@ func TestInventoryService_UpsertStock(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, stock, gotStock)
 	assert.Equal(t, availability, gotAvailability)
+	repo.AssertExpectations(t)
+}
+
+func TestInventoryService_InitializeStockDoesNotOverwriteExistingStock(t *testing.T) {
+	ctx := context.Background()
+	repo := new(MockRepository)
+	service := internal.NewInventoryService(repo, newStubAsyncProducer())
+	stock := &models.Stock{ProductID: "product-1", Quantity: 10}
+	repo.On("InitializeStock", ctx, "product-1", int32(10), int32(0)).Return(stock, false, nil).Once()
+	got, created, err := service.InitializeStock(ctx, "product-1", 10, 0)
+	assert.NoError(t, err)
+	assert.False(t, created)
+	assert.Equal(t, stock, got)
 	repo.AssertExpectations(t)
 }
 
