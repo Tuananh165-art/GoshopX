@@ -56,12 +56,12 @@ Lệnh `rollout status` chỉ quan sát. Thực hiện restart bằng thay đổ
 
 Nếu selector không khớp, lấy label từ `kubectl get pods -n goshopx --show-labels` rồi dùng đúng deployment/label. Không in toàn bộ environment hay Secret.
 
-## 2. Bật chế độ shadow và Jev rerank
+## 2. Cấu hình Jev route và rerank
 
-Trong worktree hiện tại, cấu hình lab đã đặt `JEV_MODE=shadow` và bật `JEV_RERANK_ENABLED`. Shadow chỉ quan sát route; rerank có thể gọi provider nên vẫn tiêu thụ budget. Trần ledger giữ ở 200.000 VND:
+Giá trị đang triển khai trong profile GKE lab là `JEV_MODE=active` và `JEV_RERANK_ENABLED=true`: Jev có thể chọn route và sắp thứ tự tối đa 10 sản phẩm truy hồi. Router dự phòng xử lý lỗi hoặc điểm tin cậy thấp; Jev không được quyền thay bộ lọc sản phẩm, giá, kho hay coupon. Mỗi lần gọi đều tính vào ledger; smoke test dùng một lượt hội thoại, không lặp request. Trần ledger giữ ở 200.000 VND:
 
 ```yaml
-  JEV_MODE: shadow
+  JEV_MODE: active
   JEV_RERANK_ENABLED: "true"
   AI_SPEND_LIMIT_VND: "200000"
 ```
@@ -85,7 +85,7 @@ kubectl get deploy,pods -n goshopx
 Mở `https://goshopx.click` và thử theo thứ tự. Không chạy yêu cầu lặp khi response chậm; provider timeout có thể đã tính phí.
 
 1. **DeepSeek text/tool**: hỏi bằng tiếng Việt “Tìm laptop dưới 20 triệu, RAM ít nhất 16 GB”. Xác nhận chỉ trả sản phẩm catalog và giá do catalog cung cấp.
-2. **Jev route/rerank**: so sánh hai sản phẩm trong shortlist. Shadow không thay đổi lựa chọn route; rerank có thể đổi thứ tự nhưng không thêm sản phẩm ngoài retrieval.
+2. **Jev route/rerank**: yêu cầu so sánh các sản phẩm trong shortlist. Jev có thể chọn agent và đổi thứ tự; backend giữ nguyên shortlist và bộ lọc, không được thêm sản phẩm ngoài retrieval.
 3. **Tavily**: hỏi một câu kiến thức chung về tiêu chí chọn màn hình/laptop mà catalog không mô tả. Tavily chỉ trả tối đa ba URL HTTPS; không dùng web làm nguồn giá, kho, coupon hoặc tương thích.
 4. **Multimodal**: tải một JPEG/PNG/WebP nhỏ, thử tìm mẫu tương tự. Ảnh kết quả phải là ảnh catalog; ảnh đầu vào được xử lý tạm thời.
 5. **Gemini Embedding 2**: nếu cần backfill catalog, chỉ chạy `bootstrap-catalog` sau khi xác nhận quota/ledger; không chạy lặp khi thấy 429.
@@ -141,3 +141,9 @@ Chỉ tiếp tục live smoke khi Argo `Synced/Healthy`, deployment cần thiế
 - Chỉ xóa lịch sử chat từ UI/GraphQL có ownership. Secret rotation thực hiện theo policy riêng, không xóa Secret Manager bừa bãi.
 - Admin document upload/job lifecycle/publish, no-provider chunk/cost preview, actor-attributed ingestion audit, and source-to-product linking are implemented for PDF/DOCX/TXT/MD/JSON/CSV; scan-only PDFs require OCR. Product-linked material is retrieved only when its product is shortlisted. Cart proposals require user confirmation; Order persists a non-consuming coupon quote with expiry and cart version, then rechecks coupon and price at order creation. Admin coupon lifecycle remains open. VNPAY retries reuse the pending order transaction if URL creation failed after transaction persistence.
 - Native LangGraph checkpoint, provider invoice reconciliation, account/guest isolation under production auth, and public-browser acceptance remain separate follow-ups. The application currently persists owner-bound, compacted history in PostgreSQL; it does not resume an interrupted graph mid-node. WebP pixels are decoded and normalized in the current source. Offline tests do not prove live provider or GKE operation.
+
+## Trạng thái xác minh gần nhất
+
+Ngày 2026-11-07, Argo CD báo `Synced/Healthy` ở revision `69757d1`; các workload ứng dụng và `recommender-ingestion` đều `1/1 Ready`. Smoke trong pod gọi DeepSeek, Jev và Tavily thật; ledger giữ tổng dự phòng/ước tính 3.500 VND do bảng rate provider chưa được cấu hình. Gemini Embedding 2 trả HTTP 429 trong ba lần thử, vì vậy chưa có generation vector catalog active và chưa xác minh truy vấn ảnh/dense retrieval trên index mới. Không chạy lại embedding cho tới khi quota Gemini hoạt động.
+
+Một trace LangSmith thử nghiệm đã được truy vấn lại trên project `goshopx-recommender`; payload chỉ có route, số ký tự, số sản phẩm, mã cảnh báo, latency và cờ `redacted`. Không gửi prompt/ảnh/ID phiên trong trace này. Trạng thái `Synced/Healthy` không thay thế nghiệm thu thao tác qua trình duyệt. Tại lượt kiểm tra đó, công cụ browser bị chặn bởi giới hạn usage và máy chạy PowerShell có proxy `127.0.0.1` không hoạt động; cần kiểm tra lại domain và luồng mua sắm từ trình duyệt người dùng.
