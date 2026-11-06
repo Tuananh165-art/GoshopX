@@ -61,14 +61,13 @@ Commerce backends remain authoritative. A prompt or external web result cannot m
 ### Phase D: acceptance and rollout
 - [x] Offline Python and targeted Go tests plus Web TypeScript compile have passed in CI; Helm lint/render passes. Browser visual/E2E still needs a browser environment because local Vite can hit Windows `spawn EPERM`.
 - [~] Low-volume live smoke passed for DeepSeek, Jev, Tavily and redacted LangSmith metadata. Gemini Embedding 2 returned HTTP 429 five times; catalog dense/image index smoke remains blocked on provider quota.
-- [~] Rebuilt immutable image digests are deployed and Argo is `Synced` at revision `84779da1db19b401c2c8321b30747af7b28f4356`; current health is `Progressing` because Kibana 6.2.4 is repeatedly OOMKilled. Disable Kibana in the GCP profile, then verify Argo health and GKE Workload Identity again.
-- [ ] Verify real public-host flows, recovery, latency, error behavior and provider cost; record evidence and limitations.
-- [ ] Update README/ADRs/runbooks from verified behavior, then mark the feature complete only after every acceptance gate passes.
+- [x] Rebuilt immutable image digests passed GCP quality, CodeQL, Trivy and image-build gates; promotion PR #21 merged. Argo is `Synced/Healthy` at `a2a0acab519eafbda6bfc2ec664d65e70bf7595d`, every deployment is `1/1`, and Kibana is absent from the GCP profile.
+- [~] Public-host smoke verified `/`, `/login`, and two GraphQL `recommendChat` cases (one correct no-result and one catalog-backed laptop recommendation). Browser-driven image search, follow-up memory, admin ingestion, cart confirmation, coupon quote, recovery, load/latency, and full cost reconciliation remain unverified.
+- [~] Documentation has current rollout and text-smoke evidence; final completeness depends on Gemini quota/index activation and live acceptance of the remaining browser, commerce and lifecycle flows.
 
 ## Latest live evidence (2026-11-07)
 
-- Argo `goshopx-gcp-lab` is `Synced/Progressing` at `84779da1db19b401c2c8321b30747af7b28f4356`.
-- Chat, commerce, ingestion and recommender deployments report `1/1 Available`; Kibana pod is not ready and has 186 restarts, all ending in `OOMKilled` (exit 137). Kong is currently ready with 30 historical restarts.
-- Node usage was 758m CPU and 6453Mi memory (48%); the recommender and ingestion pods are ready. This is enough capacity to run the lab services but does not remove the old Kibana memory failure.
-- Helm now supports `infrastructure.kibana.enabled`; GCP lab disables the old Kibana 6.2.4 service because its supported log stack is Grafana/Loki. Local `helm lint` passed; GCP render excludes Kibana while the existing lab profile still renders it. This change is not yet deployed.
-- Live SQL previously showed zero vector generations and zero ingestion jobs. Gemini quota and public browser flows remain unverified; see `docs/chatbot-provider-gke-runbook.md`.
+- The GCP release passed quality, CodeQL, Trivy and all 14 image builds; digest promotion PR #21 was merged. Argo `goshopx-gcp-lab` is `Synced/Healthy` at revision `a2a0acab519eafbda6bfc2ec664d65e70bf7595d` and every deployment is `1/1 Ready`. Kibana is absent from the GCP profile; Grafana/Loki remains the supported logging path.
+- Public `/` and `/login` returned HTTP 200. Public GraphQL text smoke returned HTTP 200 for a grounded no-result laptop query below ₫20 million and a positive recommendation of catalog product 81 at ₫27,499,750 for a ₫30 million budget. The latter identified missing weight data rather than inventing a specification.
+- The live SQL snapshot had zero vector generations and zero ingestion jobs after five Gemini Embedding 2 requests returned HTTP 429. Dense/image retrieval and live document ingestion are therefore not accepted. Browser follow-up/image, admin upload/publish, cart proposal confirmation, coupon quote, hosted ownership isolation and observed GCS lifecycle expiry are still open.
+- DeepSeek, Jev, Tavily and redacted LangSmith metadata have bounded live smoke evidence. The spend ledger recorded estimated/reserved usage; it is not a provider invoice reconciliation. See `docs/chatbot-provider-gke-runbook.md` for gated operator steps.
