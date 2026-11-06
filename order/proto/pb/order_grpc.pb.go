@@ -293,10 +293,16 @@ func _OrderService_CancelOrder_Handler(srv interface{}, ctx context.Context, dec
 
 func _OrderService_PreviewCheckout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PreviewCheckoutRequest)
-	if err := dec(in); err != nil { return nil, err }
-	if interceptor == nil { return srv.(OrderServiceServer).PreviewCheckout(ctx, in) }
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).PreviewCheckout(ctx, in)
+	}
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: OrderService_PreviewCheckout_FullMethodName}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) { return srv.(OrderServiceServer).PreviewCheckout(ctx, req.(*PreviewCheckoutRequest)) }
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).PreviewCheckout(ctx, req.(*PreviewCheckoutRequest))
+	}
 	return interceptor(ctx, in, info, handler)
 }
 
