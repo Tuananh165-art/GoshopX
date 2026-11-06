@@ -32,6 +32,7 @@ message OrderProduct {
 message PostOrderRequest {
   uint64 accountId = 1;
   repeated OrderProduct products = 3;
+  bool cash_on_delivery = 4;
 }
 
 message PostOrderResponse {

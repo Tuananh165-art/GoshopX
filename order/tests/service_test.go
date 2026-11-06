@@ -115,7 +115,7 @@ func TestOrderService_PostOrder(t *testing.T) {
 
 		mockRepo.On("PutOrder", ctx, mock.AnythingOfType("*models.Order")).Return(nil).Once()
 
-		result, err := service.PostOrder(ctx, accountID, totalPrice, products)
+		result, err := service.PostOrder(ctx, accountID, totalPrice, products, false)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -136,7 +136,7 @@ func TestOrderService_PostOrder(t *testing.T) {
 
 		mockRepo.On("PutOrder", ctx, mock.AnythingOfType("*models.Order")).Return(errors.New("database error")).Once()
 
-		result, err := service.PostOrder(ctx, accountID, totalPrice, products)
+		result, err := service.PostOrder(ctx, accountID, totalPrice, products, false)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)

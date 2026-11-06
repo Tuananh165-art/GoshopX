@@ -15,7 +15,7 @@ import (
 )
 
 type Service interface {
-	PostOrder(ctx context.Context, accountID uint64, totalPrice float64, products []*models.OrderedProduct) (*models.Order, error)
+	PostOrder(ctx context.Context, accountID uint64, totalPrice float64, products []*models.OrderedProduct, cashOnDelivery bool) (*models.Order, error)
 	GetOrdersForAccount(ctx context.Context, accountID uint64) ([]*models.Order, error)
 	UpdateOrderPaymentStatus(ctx context.Context, orderId uint64, status string) error
 	ListOrders(ctx context.Context, status, paymentStatus string, accountID, skip, take uint64) ([]*models.Order, error)
@@ -37,7 +37,7 @@ func (service orderService) GetProducer() sarama.AsyncProducer {
 	return service.producer
 }
 
-func (service orderService) PostOrder(ctx context.Context, accountID uint64, totalPrice float64, products []*models.OrderedProduct) (*models.Order, error) {
+func (service orderService) PostOrder(ctx context.Context, accountID uint64, totalPrice float64, products []*models.OrderedProduct, cashOnDelivery bool) (*models.Order, error) {
 	order := models.Order{
 		AccountID:     accountID,
 		TotalPrice:    totalPrice,
@@ -72,12 +72,20 @@ func (service orderService) PostOrder(ctx context.Context, accountID uint64, tot
 	}()
 
 	go func() {
-		if sendErr := kafka.SendMessage(service, sharedevents.New("order.created", accountID, "order-created", orderEventData(&order)), config.OrderEventsTopic); sendErr != nil {
+		eventType, eventKey := orderCreatedEvent(cashOnDelivery)
+		if sendErr := kafka.SendMessage(service, sharedevents.New(eventType, accountID, eventKey, orderEventData(&order)), config.OrderEventsTopic); sendErr != nil {
 			log.Println("Failed to send order event:", sendErr)
 		}
 	}()
 
 	return &order, nil
+}
+
+func orderCreatedEvent(cashOnDelivery bool) (string, string) {
+	if cashOnDelivery {
+		return "order.cod_created", "order-cod-created"
+	}
+	return "order.created", "order-created"
 }
 
 func (service orderService) ListOrders(ctx context.Context, status, paymentStatus string, accountID, skip, take uint64) ([]*models.Order, error) {

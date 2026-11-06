@@ -267,7 +267,7 @@ func (resolver *mutationResolver) CreateOrder(ctx context.Context, in generated.
 		return nil, errors.New("unauthorized")
 	}
 
-	postOrder, err := resolver.server.orderClient.PostOrder(ctx, uint64(accountID), products)
+	postOrder, err := resolver.server.orderClient.PostOrder(ctx, uint64(accountID), products, false)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +437,7 @@ func (resolver *mutationResolver) CheckoutCart(ctx context.Context, redirectURL 
 		reservationIDs = append(reservationIDs, item.ReservationID)
 	}
 
-	createdOrder, err := resolver.server.orderClient.PostOrder(ctx, uint64(accountID), orderProducts)
+	createdOrder, err := resolver.server.orderClient.PostOrder(ctx, uint64(accountID), orderProducts, false)
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +469,7 @@ func (resolver *mutationResolver) CheckoutCartCod(ctx context.Context) (*generat
 	for _, item := range cartSnapshot.Items {
 		orderProducts = append(orderProducts, &ordermodels.OrderedProduct{ID: item.ProductID, Quantity: uint32(item.Quantity)})
 	}
-	createdOrder, err := resolver.server.orderClient.PostOrder(ctx, uint64(accountID), orderProducts)
+	createdOrder, err := resolver.server.orderClient.PostOrder(ctx, uint64(accountID), orderProducts, true)
 	if err != nil {
 		return nil, err
 	}

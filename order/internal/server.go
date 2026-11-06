@@ -105,7 +105,7 @@ func (server *grpcServer) PostOrder(ctx context.Context, request *pb.PostOrderRe
 		}
 	}
 
-	postOrder, err := server.service.PostOrder(ctx, request.AccountId, totalPrice, products)
+	postOrder, err := server.service.PostOrder(ctx, request.AccountId, totalPrice, products, request.GetCashOnDelivery())
 	if err != nil {
 		log.Println("Error posting postOrder", err)
 		return nil, err

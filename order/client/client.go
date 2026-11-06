@@ -38,6 +38,7 @@ func (client *Client) PostOrder(
 	ctx context.Context,
 	accountID uint64,
 	products []*models.OrderedProduct,
+	cashOnDelivery bool,
 ) (*models.Order, error) {
 	var protoProducts []*pb.OrderProduct
 	for _, p := range products {
@@ -50,8 +51,9 @@ func (client *Client) PostOrder(
 	r, err := client.service.PostOrder(
 		ctx,
 		&pb.PostOrderRequest{
-			AccountId: accountID,
-			Products:  protoProducts,
+			AccountId:      accountID,
+			Products:       protoProducts,
+			CashOnDelivery: cashOnDelivery,
 		},
 	)
 	if err != nil {
