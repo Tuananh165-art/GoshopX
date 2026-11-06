@@ -32,6 +32,8 @@ infrastructure:
     enabled: true
     mediaBucket: "generated-mote-467410-b0-media"
     milvusBucket: "generated-mote-467410-b0-milvus"
+  kibana:
+    enabled: false
   kibanaResources: {requests: {cpu: 50m, memory: 256Mi}, limits: {cpu: 500m, memory: 1Gi}}
   dashboards: {nodePort: false, kafkaUIEnabled: false}
   nodePorts: {enabled: false}

@@ -54,13 +54,21 @@ Commerce backends remain authoritative. A prompt or external web result cannot m
 ### Phase C: Index lifecycle, memory and spend
 - [x] Product seed records source system/source ID and per-run snapshot UUID; validates the full import. Inventory seed validates its full response and initializes stock insert-only.
 - [x] Immutable vector generation registry, source ID/hash validation before activation, transactional activation and rollback.
-- [ ] Add summary compaction and explicit expiry/deletion tests against PostgreSQL, including user isolation.
+- [~] Summary compaction, seven-day expiry and owner-scoped deletion are implemented in source; live PostgreSQL expiry/deletion and cross-account isolation still need hosted acceptance.
 - [x] Settle DeepSeek/Gemini token usage and Tavily/TypeSafe per-call estimates when operator rates are configured; keep conservative reservations for unknown usage/timeouts. Provider invoice reconciliation and a spend dashboard remain open.
-- [~] JPEG/PNG uploads are decoded, dimension-limited, orientation-normalized and stripped of metadata. WebP metadata is stripped and rotated images rejected, but compressed pixel decoding remains open.
+- [x] JPEG/PNG/WebP uploads are fully decoded, dimension-limited, orientation-normalized where supported, and re-encoded to strip metadata. Rotated/animated WebP is rejected; unit coverage exists.
 
 ### Phase D: acceptance and rollout
-- [x] Run offline Python and targeted Go tests plus Web TypeScript compile; browser visual/E2E still needs a clean CI/browser environment because local Vite can hit Windows `spawn EPERM`.
-- [ ] Run one low-volume live provider smoke only after checking the current AI budget and balance.
-- [ ] Push rebuilt images, merge/promote GitOps digests, confirm Argo Healthy/Synced and GKE WI access.
+- [x] Offline Python and targeted Go tests plus Web TypeScript compile have passed in CI; Helm lint/render passes. Browser visual/E2E still needs a browser environment because local Vite can hit Windows `spawn EPERM`.
+- [~] Low-volume live smoke passed for DeepSeek, Jev, Tavily and redacted LangSmith metadata. Gemini Embedding 2 returned HTTP 429 five times; catalog dense/image index smoke remains blocked on provider quota.
+- [~] Rebuilt immutable image digests are deployed and Argo is `Synced` at revision `84779da1db19b401c2c8321b30747af7b28f4356`; current health is `Progressing` because Kibana 6.2.4 is repeatedly OOMKilled. Disable Kibana in the GCP profile, then verify Argo health and GKE Workload Identity again.
 - [ ] Verify real public-host flows, recovery, latency, error behavior and provider cost; record evidence and limitations.
 - [ ] Update README/ADRs/runbooks from verified behavior, then mark the feature complete only after every acceptance gate passes.
+
+## Latest live evidence (2026-11-07)
+
+- Argo `goshopx-gcp-lab` is `Synced/Progressing` at `84779da1db19b401c2c8321b30747af7b28f4356`.
+- Chat, commerce, ingestion and recommender deployments report `1/1 Available`; Kibana pod is not ready and has 186 restarts, all ending in `OOMKilled` (exit 137). Kong is currently ready with 30 historical restarts.
+- Node usage was 758m CPU and 6453Mi memory (48%); the recommender and ingestion pods are ready. This is enough capacity to run the lab services but does not remove the old Kibana memory failure.
+- Helm now supports `infrastructure.kibana.enabled`; GCP lab disables the old Kibana 6.2.4 service because its supported log stack is Grafana/Loki. Local `helm lint` passed; GCP render excludes Kibana while the existing lab profile still renders it. This change is not yet deployed.
+- Live SQL previously showed zero vector generations and zero ingestion jobs. Gemini quota and public browser flows remain unverified; see `docs/chatbot-provider-gke-runbook.md`.

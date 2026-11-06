@@ -369,6 +369,7 @@ spec:
       {{- end }}
     - { name: otlp-grpc, port: 4317, targetPort: otlp-grpc }
     - { name: otlp-http, port: 4318, targetPort: otlp-http }
+{{- if .Values.infrastructure.kibana.enabled }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -421,6 +422,7 @@ spec:
   type: {{ $dashType }}
   selector: { app: kibana }
   ports: [{ name: http, port: 5601, targetPort: http{{ if .Values.infrastructure.dashboards.nodePort }}, nodePort: {{ .Values.infrastructure.dashboards.kibana }}{{ end }} }]
+{{- end }}
 {{ if .Values.infrastructure.dashboards.kafkaUIEnabled }}
 ---
 apiVersion: apps/v1
