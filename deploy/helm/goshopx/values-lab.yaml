@@ -33,7 +33,7 @@ infrastructure:
 # This value is updated by .github/workflows/release-gitops.yml after an image
 # is published. Use a commit SHA only; never deploy mutable `latest` in GitOps.
 image:
-  tag: d3835f6066765c9b714733eb0fcf791cbaa3856b
+  tag: b81cc4fd73a0a4f9a332fb801eed6d7a261a38bd
 
 services:
   # Phase 0 keeps core commerce enabled. Phase 3 can enable every service only
