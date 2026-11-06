@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import os
+import threading
 import unittest
 import uuid
 import zipfile
@@ -196,6 +197,60 @@ class IngestionTests(unittest.TestCase):
             chunks = session.scalars(select(KnowledgeChunk).where(KnowledgeChunk.source_id == source.id)).all()
             self.assertEqual(len(chunks), 1)
             self.assertEqual(json.loads(chunks[0].metadata_json)["format"], "txt")
+
+    def test_worker_renews_lease_while_vector_indexer_runs(self):
+        payload = b"Product support policy and warranty details."
+        source, job = self.repository.enqueue(source_id=str(uuid.uuid4()), name="policy.txt",
+            object_uri="gs://bucket/policy", content_type="text/plain", sha256=hashlib.sha256(payload).hexdigest(),
+            owner_account_id=7, idempotency_key="lease-renewal")
+        renewed = threading.Event()
+        heartbeats = 0
+
+        def heartbeat(_job_id, _worker_id, **_kwargs):
+            nonlocal heartbeats
+            heartbeats += 1
+            renewed.set()
+            return True
+
+        def indexer(_source_id, _version, _chunks):
+            self.assertTrue(renewed.wait(1), "indexer ran without renewing the ingestion lease")
+
+        with patch("ingestion.worker.LEASE_RENEW_INTERVAL_SECONDS", 0.01), \
+                patch.object(self.repository, "heartbeat", side_effect=heartbeat):
+            worker = IngestionWorker(self.repository, "worker-1", object_reader=lambda _uri: payload,
+                                     indexer=indexer, sessions=self.sessions)
+            self.assertTrue(worker.process_one())
+
+        self.assertGreaterEqual(heartbeats, 1)
+        self.assertEqual(self.repository.get_job(job.id)[0].status, "completed")
+
+    def test_worker_stops_before_indexing_after_lease_is_lost(self):
+        payload = b"Product support policy and warranty details."
+        _, job = self.repository.enqueue(source_id=str(uuid.uuid4()), name="policy.txt",
+            object_uri="gs://bucket/policy", content_type="text/plain", sha256=hashlib.sha256(payload).hexdigest(),
+            owner_account_id=7, idempotency_key="lease-lost")
+        lease_lost = threading.Event()
+        indexer_called = threading.Event()
+
+        def heartbeat(_job_id, _worker_id, **_kwargs):
+            lease_lost.set()
+            return False
+
+        def object_reader(_uri):
+            self.assertTrue(lease_lost.wait(1), "worker did not detect lost lease")
+            return payload
+
+        def indexer(_source_id, _version, _chunks):
+            indexer_called.set()
+
+        with patch("ingestion.worker.LEASE_RENEW_INTERVAL_SECONDS", 0.01), \
+                patch.object(self.repository, "heartbeat", side_effect=heartbeat):
+            worker = IngestionWorker(self.repository, "worker-1", object_reader=object_reader,
+                                     indexer=indexer, sessions=self.sessions)
+            self.assertTrue(worker.process_one())
+
+        self.assertFalse(indexer_called.is_set())
+        self.assertEqual(self.repository.get_job(job.id)[0].status, "queued")
 
     def test_worker_does_not_persist_chunks_for_hash_mismatch(self):
         source, job = self.repository.enqueue(source_id=str(uuid.uuid4()), name="policy.txt", object_uri="gs://bucket/policy",

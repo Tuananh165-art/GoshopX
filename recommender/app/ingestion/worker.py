@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import socket
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -17,6 +18,35 @@ from ingestion.parser import parse_document
 from ingestion.repository import IngestionRepository
 from vector.embeddings import GeminiEmbedding
 from ingestion.parser import DocumentParseError
+
+LEASE_RENEW_INTERVAL_SECONDS = 30
+
+
+class _LeaseHeartbeat:
+    def __init__(self, repository: IngestionRepository, job_id: str, worker_id: str):
+        self.repository = repository
+        self.job_id = job_id
+        self.worker_id = worker_id
+        self.lost = threading.Event()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._renew, daemon=True)
+
+    def _renew(self) -> None:
+        while not self.stop.wait(LEASE_RENEW_INTERVAL_SECONDS):
+            try:
+                if not self.repository.heartbeat(self.job_id, self.worker_id):
+                    self.lost.set()
+                    return
+            except Exception:
+                continue
+
+    def __enter__(self):
+        self.thread.start()
+        return self.lost
+
+    def __exit__(self, *_exc):
+        self.stop.set()
+        self.thread.join(timeout=1)
 
 
 def read_gcs_object(uri: str, *, max_bytes: int = 20 * 1024 * 1024) -> bytes:
@@ -64,33 +94,34 @@ class IngestionWorker:
         if job is None:
             return False
         try:
-            with self.sessions() as session:
-                from sqlalchemy import select
-                from shared.db.models import KnowledgeSource
-                source = session.scalar(select(KnowledgeSource).where(KnowledgeSource.id == job.source_id))
-                if source is None:
-                    raise ValueError("source_missing")
-                source_data = (source.id, source.version, source.name, source.content_type, source.object_uri,
-                               source.linked_product_id)
-            source_id, version, name, content_type, object_uri, linked_product_id = source_data
-            if not self.repository.heartbeat(job.id, self.worker_id):
-                raise RuntimeError("job_lease_lost")
-            data = self.object_reader(object_uri)
-            with self.sessions() as session:
-                from sqlalchemy import select
-                from shared.db.models import KnowledgeSource
-                source = session.scalar(select(KnowledgeSource).where(KnowledgeSource.id == source_id))
-                if source is None or hashlib.sha256(data).hexdigest() != source.sha256:
-                    raise ValueError("source_hash_mismatch")
-            chunks = parse_document(name, content_type, data)
-            chunks = [(content, {**metadata, "product_id": linked_product_id}) for content, metadata in chunks]
-            self.repository.save_chunks(source_id, version, chunks)
-            if self.indexer:
-                if not self.repository.heartbeat(job.id, self.worker_id):
+            with _LeaseHeartbeat(self.repository, job.id, self.worker_id) as lease_lost:
+                with self.sessions() as session:
+                    from sqlalchemy import select
+                    from shared.db.models import KnowledgeSource
+                    source = session.scalar(select(KnowledgeSource).where(KnowledgeSource.id == job.source_id))
+                    if source is None:
+                        raise ValueError("source_missing")
+                    source_data = (source.id, source.version, source.name, source.content_type, source.object_uri,
+                                   source.linked_product_id)
+                source_id, version, name, content_type, object_uri, linked_product_id = source_data
+                data = self.object_reader(object_uri)
+                with self.sessions() as session:
+                    from sqlalchemy import select
+                    from shared.db.models import KnowledgeSource
+                    source = session.scalar(select(KnowledgeSource).where(KnowledgeSource.id == source_id))
+                    if source is None or hashlib.sha256(data).hexdigest() != source.sha256:
+                        raise ValueError("source_hash_mismatch")
+                chunks = parse_document(name, content_type, data)
+                chunks = [(content, {**metadata, "product_id": linked_product_id}) for content, metadata in chunks]
+                if lease_lost.is_set():
                     raise RuntimeError("job_lease_lost")
-                self.indexer(source_id, version, chunks)
-            if not self.repository.complete(job.id, self.worker_id):
-                raise RuntimeError("job_lease_lost")
+                self.repository.save_chunks(source_id, version, chunks)
+                if self.indexer:
+                    if lease_lost.is_set():
+                        raise RuntimeError("job_lease_lost")
+                    self.indexer(source_id, version, chunks)
+                if lease_lost.is_set() or not self.repository.complete(job.id, self.worker_id):
+                    raise RuntimeError("job_lease_lost")
         except Exception as exc:
             # Persist only a bounded error code; never save file contents or provider payloads.
             code = str(exc)[:64] if isinstance(exc, DocumentParseError) else f"processing_{type(exc).__name__.lower()}"
