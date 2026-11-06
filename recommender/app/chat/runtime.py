@@ -192,11 +192,18 @@ def _build_memory():
         from chat.memory import PostgresChatMemory
         from langgraph.checkpoint.postgres import PostgresSaver
         from psycopg_pool import ConnectionPool
+        from psycopg.rows import dict_row
 
         # LangGraph checkpoints are needed to resume an interrupted graph; the
         # compact conversation table remains the customer-facing history API.
         connection_url = DATABASE_URL.replace("postgresql+psycopg2://", "postgresql://", 1)
-        pool = ConnectionPool(connection_url, min_size=1, max_size=4, open=True)
+        pool = ConnectionPool(
+            connection_url,
+            min_size=1,
+            max_size=4,
+            kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+            open=True,
+        )
         checkpointer = PostgresSaver(pool)
         checkpointer.setup()
         logger.info("Persistent chat memory enabled")
