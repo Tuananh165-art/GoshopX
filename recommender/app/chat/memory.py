@@ -67,7 +67,8 @@ class PostgresChatMemory:
         with replica_engine.begin() as connection:
             if connection.dialect.name != "postgresql":
                 raise RuntimeError("Persistent chat memory requires PostgreSQL")
-            connection.execute(text("SELECT pg_advisory_xact_lock(hashtext(:thread_id))"), {"thread_id": thread_id})
+            # ChatService holds a session advisory lock for the whole turn. Acquiring
+            # the same key from this second pooled connection would deadlock.
             current = connection.execute(text(
                 "SELECT messages_json FROM chat_conversations WHERE thread_id = :thread_id FOR UPDATE"
             ), {"thread_id": thread_id}).scalar_one_or_none()
