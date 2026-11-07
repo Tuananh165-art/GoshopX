@@ -16,6 +16,8 @@
 <img src="https://img.shields.io/badge/Go-1.25%2B-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.25+" />
 <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11" />
 <img src="https://img.shields.io/badge/TypeScript-React-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript and React" />
+<img src="https://img.shields.io/badge/IaC-Terraform-844FBA?style=flat-square&logo=terraform&logoColor=white" alt="Terraform" />
+<img src="https://img.shields.io/badge/Cloud-Google%20Cloud-4285F4?style=flat-square&logo=googlecloud&logoColor=white" alt="Google Cloud" />
 </p>
 <p align="center">
 <img src="https://img.shields.io/badge/API-GraphQL-E10098?style=flat-square&logo=graphql&logoColor=white" alt="GraphQL" />
@@ -50,8 +52,10 @@
   <img src="https://cdn.simpleicons.org/prometheus" title="Prometheus" alt="Prometheus" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/grafana" title="Grafana" alt="Grafana" width="32" height="32" />
   <img src="https://cdn.simpleicons.org/milvus" title="Milvus" alt="Milvus" width="32" height="32" />
+  <img src="https://cdn.simpleicons.org/terraform" title="Terraform" alt="Terraform" width="32" height="32" />
+  <img src="https://cdn.simpleicons.org/googlecloud" title="Google Cloud" alt="Google Cloud" width="32" height="32" />
 </p>
-> **Status:** actively developed laboratory platform. CI, local configuration, Helm rendering, browser E2E, external providers, and live K3s releases are distinct verification levels.
+> **Status:** actively developed laboratory platform. CI, Terraform configuration, GKE rollout, provider smoke tests, and browser E2E are separate verification levels. See the [evidence and demo runbook](./docs/demo-and-evidence-gcp.md) for dated evidence and remaining live checks.
 
 ## Navigation
 
@@ -64,7 +68,7 @@
 
 GoshopX is a full-stack e-commerce reference platform for developers, students, and platform engineers who need a browser-safe API while keeping commerce domains independently owned. React calls GraphQL through Kong; Go services use typed gRPC for immediate internal decisions; Kafka distributes durable business facts; each bounded context owns its persistence. A Python recommender provides ranking and hybrid retrieval without making commerce unavailable when AI artifacts are missing.
 
-> **GCP lab delivery:** The dedicated Terraform resources and GKE cluster are already present in the existing project; the latest app rollout exposed Kafka PVC, MinIO image, Milvus storage and Kibana memory issues. The current fix adds private GCS object storage and Workload Identity for Milvus and GraphQL media. It still requires a Terraform plan/apply for the two new buckets, GitHub image build/promotion, Argo reconciliation and live smoke checks. See [GKE pod recovery](./docs/gcp/pod-recovery.md) and [review evidence](./docs/audit/20261105-repository-review.md).
+> **GCP lab delivery:** Terraform and GKE resources have been applied in the existing project according to the operator's deployment session. Repository evidence records a successful CI/GitOps release and HTTP/GraphQL smoke tests. Current browser acceptance, live cluster state, multimodal retrieval and ingestion still require the checks listed in the [evidence runbook](./docs/demo-and-evidence-gcp.md); Gemini Embedding 2 previously returned HTTP 429. See [GKE pod recovery](./docs/gcp/pod-recovery.md) and [review evidence](./docs/audit/20261105-repository-review.md).
 
 ## GCP Architecture
 
@@ -72,9 +76,32 @@ GoshopX is a full-stack e-commerce reference platform for developers, students, 
 
 Editable source: [HTML/SVG diagram](./docs/diagrams/gcp-lab-architecture.html), [standalone SVG](./docs/diagrams/gcp-lab-architecture.svg), [PNG renderer](./docs/diagrams/render_architecture_png.py). GCP deployment walkthrough and teardown are in [docs/gcp](./docs/gcp/README.md).
 
+Terraform and Google Cloud are used for the lab foundation and runtime:
+
+| Service | Role in this lab |
+| --- | --- |
+| Terraform | Declares and updates project-scoped network, GKE, SQL, registry, buckets, IAM, secrets, budget, IP and certificate resources. |
+| GKE Standard | Runs the GoshopX Kubernetes workloads and Argo CD-managed application release. |
+| Artifact Registry | Stores container images built and scanned by GitHub Actions. |
+| Cloud SQL for PostgreSQL | Stores service databases and recommender operational data. |
+| Secret Manager + Workload Identity | Supplies runtime secrets without committing credentials or service-account keys. |
+| Cloud Storage | Holds Terraform state and private application/index/media objects as configured. |
+| Certificate Manager + external load balancing | Terminates public HTTPS for the configured hostnames. |
+| Cloud Logging/Monitoring, KMS/Binary Authorization, WIF | Platform telemetry, signing/verification controls and keyless GitHub Actions federation where enabled. |
+
+These are configured resources; the table does not assert that every optional control has passed live acceptance. See [GCP service screenshots and demo steps](./docs/demo-and-evidence-gcp.md).
+
+### Current visual evidence
+
+The checked-in captures below are dated UI snapshots. The second image shows an **empty assistant widget**, so it is not evidence of a successful AI response. The [evidence runbook](./docs/demo-and-evidence-gcp.md) lists the missing live GCP Console and browser acceptance captures.
+
+| Storefront snapshot | Assistant widget snapshot |
+| --- | --- |
+| ![GoshopX storefront screenshot](./docs/evidence/screenshots/goshopx-storefront-2026-11-07.png) | ![GoshopX assistant widget visible but empty](./docs/evidence/screenshots/goshopx-assistant-ready-2026-11-07.png) |
+
 ## AI Product Assistant
 
-The recommender contains LangGraph Discovery, Recommendation, Cart-advice and Multimodal paths using catalog-grounded BM25+dense retrieval with RRF, bounded catalog tools, and PostgreSQL conversation memory with compacted older context. Image results come from catalog thumbnails; input images are validated and stripped from persisted browser history. Tavily is bounded to supplemental general knowledge, Jev reranking is optional, LangSmith emits redacted metadata only, and the spend ledger reserves estimated provider costs. Users can review and confirm a versioned, expiring cart proposal. Order provides a non-consuming integer-VND coupon quote with expiry/cart-version, then rechecks product prices and coupon eligibility atomically when creating the order; Payment checks the saved order against current catalog prices before charging. Quote persistence, coupon administration, durable proposal resume, provider invoice reconciliation, and live GKE/provider acceptance remain open. See [AI RAG status and provider configuration](./docs/chatbot-agentic-rag.md) and the [provider-to-GKE runbook](./docs/chatbot-provider-gke-runbook.md).
+The recommender contains LangGraph Discovery, Recommendation, Cart-advice and Multimodal paths using catalog-grounded retrieval, bounded tools, and PostgreSQL conversation history. Image results should come from catalog thumbnails; input image and dense retrieval acceptance depends on a populated vector generation and provider quota. Tavily is supplemental general knowledge, Jev reranking is optional, LangSmith is configured for redacted metadata, and the spend ledger estimates provider cost. Users can review and confirm a versioned cart proposal. See [AI RAG status and provider configuration](./docs/chatbot-agentic-rag.md), [provider-to-GKE runbook](./docs/chatbot-provider-gke-runbook.md), and the [dated evidence guide](./docs/demo-and-evidence-gcp.md) for exact verified limits.
 
 ## Load Testing
 
@@ -239,7 +266,7 @@ For Helm rollback, also revert the Git promotion commit; otherwise Argo CD reapp
 
 ## Contributing
 
-1. Read [project rules](./.agents/rules/project-rules.md), business rules, and affected ADRs.
+1. Read the [business rules](./docs/03-business-domain-rules.md) and affected ADRs.
 2. Keep GraphQL public, gRPC internal, Kafka event-driven, and persistence service-owned.
 3. Add focused tests and update contracts/runbooks/ADRs with boundary changes.
 4. Never commit secrets or local runtime state.

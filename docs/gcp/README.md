@@ -1,6 +1,6 @@
 # GoshopX GCP 48-hour lab
 
-This is an **unapplied lab configuration** targeting the existing project `generated-mote-467410-b0`. Terraform will not create, rename, relabel, or delete the project. It will create named GoshopX resources inside it and manage selected project APIs/IAM bindings. Review the plan carefully because this project may contain unrelated resources. Do not run `apply` until live credit expiry, billing currency, SKU estimate, target-project quota, available resource names, and the lab window have been checked. A billing budget raises alerts; it does not cap spend.
+This runbook describes the GoshopX lab in existing project `generated-mote-467410-b0`. Operator transcripts and the dated release runbook record Terraform applies, GKE deployment, and a successful GitOps promotion. Terraform manages named GoshopX resources inside the existing project; it does not create or delete the project. Before any further `apply`, verify the current state, credit expiry, billing currency, SKU estimate, quota and resource names. A billing budget raises alerts; it does not cap spend. Current live state must be rechecked from an authenticated operator workstation; the evidence agent could not refresh GKE credentials because Windows denied access to `gcloud`'s `credentials.db`.
 
 For the ordered operator procedure from tool setup through GKE rollout and acceptance, use [deploy-step-by-step.md](./deploy-step-by-step.md). This overview records architecture, cost and current gates.
 

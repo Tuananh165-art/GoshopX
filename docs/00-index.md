@@ -4,6 +4,8 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 
 ## Core Documents
 
+- [GCP Demo and Evidence Runbook](./demo-and-evidence-gcp.md): PowerShell, Terraform, GKE, GCP Console and browser scenarios with screenshot naming, redaction and evidence status.
+- [Evidence Screenshot Inventory](./evidence/README.md): existing screenshots and capture rules; distinguishes widget visibility from successful AI responses.
 - [GCP GKE Terraform Lab](./gcp/README.md): separated-project GKE/Cloud SQL design, budget gate, GitOps setup, DNS cutover and evidence limits.
 - [GCP Deploy Step by Step](./gcp/deploy-step-by-step.md): Windows PowerShell sequence from preflight, Terraform/state/secrets, GKE Secret Sync and Argo CD through catalog, domain, acceptance and cleanup gates.
 - [GKE Pod Recovery](./gcp/pod-recovery.md): targeted recovery for Kafka PVC `lost+found`, MinIO image removal, Milvus GCS/Workload Identity, GraphQL media and Kibana OOM.
@@ -11,6 +13,7 @@ This folder is the source of truth for planning and operating GoshopX with BMAD 
 - [k6 Load Testing](./load-testing.md): smoke/load/stress/soak profiles, RPS/VU/CCU definitions and reporting rules.
 - [Chatbot Agentic RAG](./chatbot-agentic-rag.md): LangGraph routes, BM25+dense retrieval, bounded tools, PostgreSQL memory, config and remaining delivery gates.
 - [Chatbot Provider GKE Runbook](./chatbot-provider-gke-runbook.md): safe provider secret sync, GitOps rollout, low-volume real-provider smoke, cost checks and stop conditions.
+- [Chatbot QA Review](./chatbot-qa-review-2026-11-07.md): confirmed cart reservation length defect, regression evidence, prompt/edge-case matrix and live verification limits.
 - [Repository Review](./audit/20261105-repository-review.md): evidence, fixed defects and unresolved audit items.
 - [GCP Architecture Diagram](./diagrams/gcp-lab-architecture.html): editable themed HTML source with standalone SVG, PNG and renderer.
 
