@@ -469,7 +469,8 @@ func sameProposalItems(left, right []models.ProposalItem) bool {
 
 func proposalReservationID(proposalID, productID string) string {
 	digest := sha256.Sum256([]byte(proposalID + ":" + productID))
-	return "cart-proposal-" + hex.EncodeToString(digest[:])
+	// Inventory stores reservation IDs in VARCHAR(64): namespace (14) + digest (50).
+	return "cart-proposal-" + hex.EncodeToString(digest[:25])
 }
 
 func (service *cartService) filterExpired(cart *models.Cart) *models.Cart {

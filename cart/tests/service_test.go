@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,7 +163,9 @@ func TestCartService_CreateAndConfirmCartProposalIsIdempotent(t *testing.T) {
 
 	repo.On("GetCartProposalByID", mock.Anything, uint64(7), proposal.ID).Return(proposal, nil).Twice()
 	repo.On("GetCart", mock.Anything, uint64(7)).Return(&models.Cart{AccountID: 7, Version: 3, Items: []models.CartItem{}}, nil).Once()
-	inv.On("ReserveStock", mock.Anything, mock.AnythingOfType("string"), uint64(7), "p1", int32(2), mock.AnythingOfType("time.Duration"), "cart").Return(
+	inv.On("ReserveStock", mock.Anything, mock.MatchedBy(func(id string) bool {
+		return len(id) <= 64 && strings.HasPrefix(id, "cart-proposal-")
+	}), uint64(7), "p1", int32(2), mock.AnythingOfType("time.Duration"), "cart").Return(
 		&inventorymodels.StockReservation{ReservationID: "reservation-1", ProductID: "p1", Quantity: 2, ExpiresAt: time.Now().UTC().Add(15 * time.Minute)},
 		&inventorymodels.Availability{ProductID: "p1", AvailableQuantity: 8}, nil,
 	).Once()
